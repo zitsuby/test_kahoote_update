@@ -5,7 +5,6 @@ import { ReactNode, useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { LoadingAnimation } from "./loading-animation";
 
-// Tipe animasi yang tersedia
 export type AnimationType = "fade" | "slide" | "zoom" | "slideUp" | "slideDown" | "scaleRotate" | "none";
 
 interface PageTransitionProps {
@@ -84,7 +83,7 @@ export function PageTransition({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-50 flex items-center justify-center"
+        className="fixed inset-0 bg-deep-ocean z-[9999] flex items-center justify-center"
       >
         <LoadingAnimation 
           variant={loadingVariant} 
@@ -105,7 +104,7 @@ export function PageTransition({
         variants={animations[animation]}
         transition={{
           duration,
-          ease: [0.22, 1, 0.36, 1], // Custom easing for smoother transitions
+          ease: [0.22, 1, 0.36, 1],
           type: "tween"
         }}
         className="h-full w-full"

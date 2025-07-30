@@ -1,57 +1,74 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useRef, useMemo } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, Settings, Maximize, Minimize, Unlock, Volume2, VolumeX, Play, Copy, Check, AlertCircle, Clock } from "lucide-react"
-import { useParams, useSearchParams, useRouter } from "next/navigation"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import QRCode from "react-qr-code"
-import { useAuth } from "@/contexts/auth-context"
-import { supabase } from "@/lib/supabase"
-import { toast } from "sonner"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { QRCodeSVG } from "qrcode.react"
-import { ChatPanel } from "@/components/ui/chat-panel"
+import { useEffect, useState, useRef, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Users,
+  Settings,
+  Maximize,
+  Minimize,
+  Unlock,
+  Volume2,
+  VolumeX,
+  Play,
+  Copy,
+  Check,
+  AlertCircle,
+  Clock,
+} from "lucide-react";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import QRCode from "react-qr-code";
+import { useAuth } from "@/contexts/auth-context";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { QRCodeSVG } from "qrcode.react";
+import { ChatPanel } from "@/components/ui/chat-panel";
 import {
   motion,
   useTransform,
   AnimatePresence,
   useMotionValue,
   useSpring,
-} from "framer-motion"
+} from "framer-motion";
 
 export function FullscreenButton() {
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const toggleFullscreen = () => {
-    const elem = document.documentElement
+    const elem = document.documentElement;
 
     if (!document.fullscreenElement) {
-      elem.requestFullscreen?.()
+      elem.requestFullscreen?.();
     } else {
-      document.exitFullscreen?.()
+      document.exitFullscreen?.();
     }
-  }
+  };
 
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement)
-    }
+      setIsFullscreen(!!document.fullscreenElement);
+    };
 
-    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
 
     return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange)
-    }
-  }, [])
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
   return (
     <button onClick={toggleFullscreen} className="flex items-center">
-      {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+      {isFullscreen ? (
+        <Minimize className="w-5 h-5" />
+      ) : (
+        <Maximize className="w-5 h-5" />
+      )}
     </button>
-  )
+  );
 }
 
 interface Quiz {
@@ -78,7 +95,7 @@ interface GameSession {
   status: string;
   total_time_minutes: number | null;
   countdown_started_at?: number | null;
-  game_end_mode?: 'first_finish' | 'wait_timer';
+  game_end_mode?: "first_finish" | "wait_timer";
   participants: Array<{
     id: string;
     nickname: string;
@@ -112,37 +129,39 @@ interface SupabaseQuizResponse {
 }
 
 export default function HostRoomPage() {
-  const params = useParams()
-  const router = useRouter()
-  const { user, loading } = useAuth()
-  
-  const roomCode = params.code as string
-  const [quiz, setQuiz] = useState<Quiz | null>(null)
-  const [gameSession, setGameSession] = useState<GameSession | null>(null)
-  const [showCountdown, setShowCountdown] = useState(false)
-  const [countdown, setCountdown] = useState(3)
-  const [copied, setCopied] = useState(false)
-  const [showQRPopup, setShowQRPopup] = useState(false)
-  const [muted, setMuted] = useState(false)
-  const [quizTitle, setQuizTitle] = useState("Game Session")
-  const [participants, setParticipants] = useState<any[]>([])
-  const [totalQuestions, setTotalQuestions] = useState(0)
-  const [gameEndMode, setGameEndMode] = useState<'first_finish' | 'wait_timer'>('wait_timer')
-  const hasCreatedSession = useRef(false)
-  const [totalTimeMinutes, setTotalTimeMinutes] = useState<number>(10)
-  const [showTimeSetup, setShowTimeSetup] = useState(false)
-  const [isJoining, setIsJoining] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
-  const springConfig = { stiffness: 100, damping: 5 }
-  const x = useMotionValue(0)
+  const params = useParams();
+  const router = useRouter();
+  const { user, loading } = useAuth();
+
+  const roomCode = params.code as string;
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [gameSession, setGameSession] = useState<GameSession | null>(null);
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdown, setCountdown] = useState(3);
+  const [copied, setCopied] = useState(false);
+  const [showQRPopup, setShowQRPopup] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [quizTitle, setQuizTitle] = useState("Game Session");
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [gameEndMode, setGameEndMode] = useState<"first_finish" | "wait_timer">(
+    "wait_timer"
+  );
+  const hasCreatedSession = useRef(false);
+  const [totalTimeMinutes, setTotalTimeMinutes] = useState<number>(10);
+  const [showTimeSetup, setShowTimeSetup] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const springConfig = { stiffness: 100, damping: 5 };
+  const x = useMotionValue(0);
   const rotate = useSpring(
     useTransform(x, [-100, 100], [-15, 15]),
     springConfig
-  )
+  );
   const translateX = useSpring(
     useTransform(x, [-100, 100], [-20, 20]),
     springConfig
-  )
+  );
   const [error, setError] = useState<{
     type:
       | "permission"
@@ -152,21 +171,23 @@ export default function HostRoomPage() {
       | "unknown";
     message: string;
     details?: string;
-  } | null>(null)
-  const [countdownLeft, setCountdownLeft] = useState<number | null>(null)
-  const countdownDuration = 10
-  const [hostParticipantId, setHostParticipantId] = useState<string | null>(null)
+  } | null>(null);
+  const [countdownLeft, setCountdownLeft] = useState<number | null>(null);
+  const countdownDuration = 10;
+  const [hostParticipantId, setHostParticipantId] = useState<string | null>(
+    null
+  );
   const [userProfile, setUserProfile] = useState<{
     username: string;
     avatar_url: string | null;
-  } | null>(null)
+  } | null>(null);
 
   // Prefetch game page
   useEffect(() => {
     if (gameSession?.id) {
-      router.prefetch(`../game/${gameSession.id}`)
+      router.prefetch(`../game/${gameSession.id}`);
     }
-  }, [router, gameSession])
+  }, [router, gameSession]);
 
   useEffect(() => {
     if (user && !gameSession && !hasCreatedSession.current) {
@@ -321,7 +342,7 @@ export default function HostRoomPage() {
           )
         `
         )
-        .eq("code", roomCode) // Use code instead of id for submarine mode
+        .eq("id", roomCode) // Use code instead of id for submarine mode
         .single();
 
       console.log("📊 Quiz query result:", { quizData, quizError });
@@ -565,7 +586,7 @@ export default function HostRoomPage() {
         started_at: startedTime.toISOString(),
         status: "active",
         total_time_minutes: totalTimeMinutes,
-        game_end_mode: gameEndMode,
+        // game_end_mode: gameEndMode,
       })
       .eq("id", gameSession.id);
 
@@ -658,7 +679,7 @@ export default function HostRoomPage() {
           started_at: startedTime.toISOString(),
           status: "active",
           total_time_minutes: totalTimeMinutes,
-          game_end_mode: gameEndMode,
+          // game_end_mode: gameEndMode,
         })
         .eq("id", gameSession.id);
 
@@ -681,9 +702,7 @@ export default function HostRoomPage() {
 
         if (secondsLeft <= 0) {
           clearInterval(interval);
-          router.push(
-            `../game/${gameSession.id}?participant=${participantId}`
-          );
+          router.push(`../game/${gameSession.id}?participant=${participantId}`);
         }
       }, 1000);
     } catch (err) {
@@ -698,43 +717,6 @@ export default function HostRoomPage() {
     }
   };
 
-  const startGame = async () => {
-    if (!gameSession || participants.length === 0) return
-    
-    try {
-      setShowCountdown(true)
-      setCountdown(3)
-      
-      // Update session status
-      await supabase
-        .from("game_sessions")
-        .update({
-          status: "active",
-          game_end_mode: gameEndMode,
-          total_time_minutes: totalTimeMinutes
-        })
-        .eq("id", gameSession.id)
-        
-      // Countdown effect
-      let counter = 3
-      const countdownInterval = setInterval(() => {
-        counter -= 1
-        setCountdown(counter)
-        
-        if (counter === 0) {
-          clearInterval(countdownInterval)
-          router.push(`../game/${gameSession.id}`)
-        }
-      }, 1000)
-      
-    } catch (error) {
-      console.error("Error starting game:", error)
-      toast.error("Failed to start game")
-    }
-  }
-
-  
-
   const copyGamePin = async () => {
     if (!gameSession) return;
 
@@ -748,12 +730,12 @@ export default function HostRoomPage() {
   };
 
   const toggleMute = () => {
-    setMuted((prev) => !prev)
-    const audio = document.getElementById("bg-audio") as HTMLAudioElement
+    setMuted((prev) => !prev);
+    const audio = document.getElementById("bg-audio") as HTMLAudioElement;
     if (audio) {
-      audio.muted = !audio.muted
+      audio.muted = !audio.muted;
     }
-  }
+  };
 
   const endSession = async () => {
     if (!gameSession) return;
@@ -808,7 +790,8 @@ export default function HostRoomPage() {
     }
   };
 
-  const formattedGamePin = gameSession?.game_pin?.replace(/(\d{3})(\d{3})/, "$1 $2") || ""
+  const formattedGamePin =
+    gameSession?.game_pin?.replace(/(\d{3})(\d{3})/, "$1 $2") || "";
 
   if (error) {
     return (
@@ -975,74 +958,82 @@ export default function HostRoomPage() {
       <div className="relative z-20 min-h-screen flex flex-col">
         {/* Header with Game PIN */}
         <div className="flex justify-center items-start p-5 gap-4">
-        <Card className="bg-transparent border-0">
-          <CardContent className="p-1 rounded-xl text-center">
-            <div className="flex gap-2">
-              <div className="bg-white p-4 px-6 rounded-sm text-left">
-                <h1 className="font-semibold">Game PIN:</h1>
-                <h1
-                  className="text-5xl font-black cursor-pointer hover:opacity-70 transition"
-                  onClick={copyGamePin}
-                >
-                  {formattedGamePin}
-                </h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  {quizTitle} • {totalQuestions} questions
-                </p>
-              </div>
-              <div 
-                className="bg-white p-1 rounded-sm cursor-pointer" 
-                onClick={() => setShowQRPopup(true)}
-              >
-                <QRCode 
-                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/join?pin=${gameSession?.game_pin || ''}`} 
-                  size={100} 
-                />
-              </div>
-              
-              {showQRPopup && gameSession && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                  <div className="p-6 rounded-xl shadow-xl flex flex-col items-center gap-4">
-                    <div className="bg-white p-4 px-6 rounded-sm text-left">
-                      <h1 className="font-semibold">Game PIN:</h1>
-                      <h1
-                        className="text-7xl font-black cursor-pointer hover:opacity-70 transition"
-                        onClick={copyGamePin}
-                      >
-                        {formattedGamePin}
-                      </h1>
-                    </div>
-                    <div className="p-3 rounded-lg bg-white">
-                      <QRCode 
-                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/join?pin=${gameSession.game_pin}`} 
-                        size={325} 
-                      />
-                    </div>
-                    <button
-                      onClick={() => setShowQRPopup(false)}
-                      className="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-                    >
-                      Close
-                    </button>
-                  </div>
+          <Card className="bg-transparent border-0">
+            <CardContent className="p-1 rounded-xl text-center">
+              <div className="flex gap-2">
+                <div className="bg-white p-4 px-6 rounded-sm text-left">
+                  <h1 className="font-semibold">Game PIN:</h1>
+                  <h1
+                    className="text-5xl font-black cursor-pointer hover:opacity-70 transition"
+                    onClick={copyGamePin}
+                  >
+                    {formattedGamePin}
+                  </h1>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {quizTitle} • {totalQuestions} questions
+                  </p>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                <div
+                  className="bg-white p-1 rounded-sm cursor-pointer"
+                  onClick={() => setShowQRPopup(true)}
+                >
+                  <QRCode
+                    value={`${
+                      typeof window !== "undefined"
+                        ? window.location.origin
+                        : ""
+                    }/join?pin=${gameSession?.game_pin || ""}`}
+                    size={100}
+                  />
+                </div>
+
+                {showQRPopup && gameSession && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="p-6 rounded-xl shadow-xl flex flex-col items-center gap-4">
+                      <div className="bg-white p-4 px-6 rounded-sm text-left">
+                        <h1 className="font-semibold">Game PIN:</h1>
+                        <h1
+                          className="text-7xl font-black cursor-pointer hover:opacity-70 transition"
+                          onClick={copyGamePin}
+                        >
+                          {formattedGamePin}
+                        </h1>
+                      </div>
+                      <div className="p-3 rounded-lg bg-white">
+                        <QRCode
+                          value={`${
+                            typeof window !== "undefined"
+                              ? window.location.origin
+                              : ""
+                          }/join?pin=${gameSession.game_pin}`}
+                          size={325}
+                        />
+                      </div>
+                      <button
+                        onClick={() => setShowQRPopup(false)}
+                        className="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Main game area */}
         <div className="flex items-center justify-end mr-4 gap-2">
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             className="bg-white/90 border-2 border-gray-300 hover:bg-white"
             onClick={endSession}
           >
             <Unlock className="w-5 h-5" />
           </Button>
-          
+
           {/* Countdown sedang berlangsung */}
           {countdownLeft !== null && countdownLeft > 0 ? (
             <Card className="bg-white/90 border-2 border-gray-300">
@@ -1084,7 +1075,7 @@ export default function HostRoomPage() {
                       className="w-full"
                     />
                   </div>
-                  
+
                   {/* Game End Mode Selection */}
                   <div className="space-y-3">
                     <Label className="block text-sm font-medium text-gray-700">
@@ -1097,12 +1088,20 @@ export default function HostRoomPage() {
                           id="wait_timer"
                           name="gameEndMode"
                           value="wait_timer"
-                          checked={gameEndMode === 'wait_timer'}
-                          onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
+                          checked={gameEndMode === "wait_timer"}
+                          onChange={(e) =>
+                            setGameEndMode(
+                              e.target.value as "first_finish" | "wait_timer"
+                            )
+                          }
                           className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
                         />
-                        <label htmlFor="wait_timer" className="text-sm text-gray-700 cursor-pointer">
-                          <span className="font-medium">Wait for Timer</span> - Semua pemain menunggu hingga waktu habis
+                        <label
+                          htmlFor="wait_timer"
+                          className="text-sm text-gray-700 cursor-pointer"
+                        >
+                          <span className="font-medium">Wait for Timer</span> -
+                          Semua pemain menunggu hingga waktu habis
                         </label>
                       </div>
                       <div className="flex items-center space-x-3">
@@ -1111,12 +1110,20 @@ export default function HostRoomPage() {
                           id="first_finish"
                           name="gameEndMode"
                           value="first_finish"
-                          checked={gameEndMode === 'first_finish'}
-                          onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
+                          checked={gameEndMode === "first_finish"}
+                          onChange={(e) =>
+                            setGameEndMode(
+                              e.target.value as "first_finish" | "wait_timer"
+                            )
+                          }
                           className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
                         />
-                        <label htmlFor="first_finish" className="text-sm text-gray-700 cursor-pointer">
-                          <span className="font-medium">First to Finish</span> - Game berakhir ketika satu pemain selesai
+                        <label
+                          htmlFor="first_finish"
+                          className="text-sm text-gray-700 cursor-pointer"
+                        >
+                          <span className="font-medium">First to Finish</span> -
+                          Game berakhir ketika satu pemain selesai
                         </label>
                       </div>
                     </div>
@@ -1155,7 +1162,7 @@ export default function HostRoomPage() {
             </>
           )}
         </div>
-        
+
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="relative w-full max-w-4xl">
             {/* Submarine */}
@@ -1165,11 +1172,11 @@ export default function HostRoomPage() {
                   {participants.slice(0, 4).map((player) => (
                     <div key={player.id} className="flex flex-col items-center">
                       <Avatar className="w-12 h-12 border-2 border-white shadow-lg">
-                        <AvatarImage 
+                        <AvatarImage
                           src={
-                            player.profiles?.avatar_url || 
+                            player.profiles?.avatar_url ||
                             `https://api.dicebear.com/7.x/avataaars/svg?seed=${player.id}`
-                          } 
+                          }
                         />
                         <AvatarFallback className="bg-blue-500 text-white">
                           {player.nickname[0]}
@@ -1192,17 +1199,17 @@ export default function HostRoomPage() {
                 </p>
               </div>
             )}
-            
+
             {participants.length > 4 && (
               <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 mt-8">
                 {participants.slice(4).map((player) => (
                   <div key={player.id} className="flex flex-col items-center">
                     <Avatar className="w-12 h-12 border-2 border-white shadow-lg">
-                      <AvatarImage 
+                      <AvatarImage
                         src={
-                          player.profiles?.avatar_url || 
+                          player.profiles?.avatar_url ||
                           `https://api.dicebear.com/7.x/avataaars/svg?seed=${player.id}`
-                        } 
+                        }
                       />
                       <AvatarFallback className="bg-blue-500 text-white">
                         {player.nickname[0]}
@@ -1232,7 +1239,11 @@ export default function HostRoomPage() {
               className="hover:text-white hover:bg-black cursor-pointer"
               asChild
             >
-              {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              {muted ? (
+                <VolumeX className="w-5 h-5" />
+              ) : (
+                <Volume2 className="w-5 h-5" />
+              )}
             </Button>
             <Settings className="w-5 h-5 text-white cursor-pointer" />
             <Button asChild>
@@ -1254,5 +1265,5 @@ export default function HostRoomPage() {
         />
       )}
     </div>
-  )
+  );
 }
