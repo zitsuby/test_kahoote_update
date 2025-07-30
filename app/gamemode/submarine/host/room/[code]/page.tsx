@@ -586,12 +586,24 @@ export default function HostRoomPage() {
         started_at: startedTime.toISOString(),
         status: "active",
         total_time_minutes: totalTimeMinutes,
-        // game_end_mode: gameEndMode,
+        game_end_mode: gameEndMode || "wait_timer",
       })
       .eq("id", gameSession.id);
 
     if (error) {
-      console.error("Gagal menyimpan waktu countdown:", error);
+      console.error("❌ Database error details:", error);
+      console.error("Error code:", error.code);
+      console.error("Error message:", error.message);
+      console.error("Error details:", error.details);
+      
+      // Handle specific database errors
+      if (error.code === "42703" && error.message?.includes("game_model")) {
+        console.error("🔧 Database schema issue detected. Please run the latest migrations.");
+        toast.error("Database schema needs updating. Please contact administrator.");
+      } else {
+        // Show user-friendly error message
+        toast.error("Gagal memulai game. Silakan coba lagi.");
+      }
       return;
     }
 
@@ -679,16 +691,33 @@ export default function HostRoomPage() {
           started_at: startedTime.toISOString(),
           status: "active",
           total_time_minutes: totalTimeMinutes,
-          // game_end_mode: gameEndMode,
+          game_end_mode: gameEndMode || "wait_timer",
         })
         .eq("id", gameSession.id);
 
       if (updateError) {
-        setError({
-          type: "unknown",
-          message: "Gagal memulai countdown",
-          details: "Gagal menyimpan waktu mulai",
-        });
+        console.error("❌ Database error details:", updateError);
+        console.error("Error code:", updateError.code);
+        console.error("Error message:", updateError.message);
+        console.error("Error details:", updateError.details);
+        
+        // Handle specific database errors
+        if (updateError.code === "42703" && updateError.message?.includes("game_model")) {
+          console.error("🔧 Database schema issue detected. Please run the latest migrations.");
+          setError({
+            type: "database_schema",
+            message: "Database schema needs updating",
+            details: "Please contact administrator to run database migrations",
+          });
+          toast.error("Database schema needs updating. Please contact administrator.");
+        } else {
+          setError({
+            type: "unknown",
+            message: "Gagal memulai countdown",
+            details: "Gagal menyimpan waktu mulai",
+          });
+          toast.error("Gagal memulai game. Silakan coba lagi.");
+        }
         return;
       }
 

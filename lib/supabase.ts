@@ -157,6 +157,9 @@ export type Database = {
           created_at: string
           started_at: string | null
           ended_at: string | null
+          game_end_mode: string
+          total_time_minutes: number | null
+          countdown_started_at: string | null
         }
         Insert: {
           id?: string
@@ -168,6 +171,9 @@ export type Database = {
           created_at?: string
           started_at?: string | null
           ended_at?: string | null
+          game_end_mode?: string
+          total_time_minutes?: number | null
+          countdown_started_at?: string | null
         }
         Update: {
           id?: string
@@ -179,6 +185,9 @@ export type Database = {
           created_at?: string
           started_at?: string | null
           ended_at?: string | null
+          game_end_mode?: string
+          total_time_minutes?: number | null
+          countdown_started_at?: string | null
         }
       }
       game_participants: {
