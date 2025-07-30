@@ -82,6 +82,14 @@ interface Quiz {
     question_text: string;
     time_limit: number;
     points: number;
+    order_index: number;
+    answers: Array<{
+      id: string;
+      answer_text: string;
+      is_correct: boolean;
+      color: string;
+      order_index: number;
+    }>;
   }>;
   profiles: {
     username: string;
@@ -121,6 +129,14 @@ interface SupabaseQuizResponse {
     question_text: string;
     time_limit: number;
     points: number;
+    order_index?: number;
+    answers?: Array<{
+      id: string;
+      answer_text: string;
+      is_correct: boolean;
+      color: string;
+      order_index?: number;
+    }>;
   }>;
   profiles: {
     username: string;
@@ -334,7 +350,15 @@ export default function HostRoomPage() {
             id,
             question_text,
             time_limit,
-            points
+            points,
+            order_index,
+            answers (
+              id,
+              answer_text,
+              is_correct,
+              color,
+              order_index
+            )
           ),
           profiles!quizzes_creator_id_fkey (
             username,
@@ -342,7 +366,7 @@ export default function HostRoomPage() {
           )
         `
         )
-        .eq("id", roomCode) // Use code instead of id for submarine mode
+        .eq("id", roomCode) // Use code as quiz ID for submarine mode
         .single();
 
       console.log("📊 Quiz query result:", { quizData, quizError });
@@ -416,7 +440,20 @@ export default function HostRoomPage() {
         description: quiz.description,
         is_public: quiz.is_public,
         creator_id: quiz.creator_id,
-        questions: quiz.questions,
+        questions: quiz.questions.map(q => ({
+          id: q.id,
+          question_text: q.question_text,
+          time_limit: q.time_limit,
+          points: q.points,
+          order_index: q.order_index || 0,
+          answers: (q.answers || []).map(a => ({
+            id: a.id,
+            answer_text: a.answer_text,
+            is_correct: a.is_correct,
+            color: a.color,
+            order_index: a.order_index || 0
+          }))
+        })),
         profiles: {
           username: quiz.profiles.username,
           avatar_url: quiz.profiles.avatar_url || null,
@@ -439,6 +476,7 @@ export default function HostRoomPage() {
           status: "waiting",
           total_time_minutes: null,
           game_end_mode: gameEndMode,
+          game_mode: "submarine", // Set game mode to submarine
         })
         .select()
         .single();
@@ -574,39 +612,57 @@ export default function HostRoomPage() {
   const startCountdownBeforeGame = async () => {
     if (!gameSession || !totalTimeMinutes) return;
 
-    const countdownStartTime = new Date();
-    const startedTime = new Date(
-      countdownStartTime.getTime() + countdownDuration * 1000
-    );
+    try {
+      const countdownStartTime = new Date();
+      const startedTime = new Date(
+        countdownStartTime.getTime() + countdownDuration * 1000
+      );
 
-    const { error } = await supabase
-      .from("game_sessions")
-      .update({
-        countdown_started_at: countdownStartTime.toISOString(),
-        started_at: startedTime.toISOString(),
-        status: "active",
-        total_time_minutes: totalTimeMinutes,
-        // game_end_mode: gameEndMode,
-      })
-      .eq("id", gameSession.id);
+      console.log("🎮 Starting countdown for session:", gameSession.id);
+      console.log("⏰ Countdown start time:", countdownStartTime.toISOString());
+      console.log("🚀 Game start time:", startedTime.toISOString());
 
-    if (error) {
-      console.error("Gagal menyimpan waktu countdown:", error);
-      return;
-    }
+      const { data, error } = await supabase
+        .from("game_sessions")
+        .update({
+          countdown_started_at: countdownStartTime.toISOString(),
+          started_at: startedTime.toISOString(),
+          status: "active",
+          total_time_minutes: totalTimeMinutes,
+        })
+        .eq("id", gameSession.id)
+        .select();
 
-    setCountdownLeft(countdownDuration);
-    let secondsLeft = countdownDuration;
-
-    const interval = setInterval(() => {
-      secondsLeft -= 1;
-      setCountdownLeft(secondsLeft);
-
-      if (secondsLeft <= 0) {
-        clearInterval(interval);
-        router.push(`../game/${gameSession.id}`);
+      if (error) {
+        console.error("❌ Database error details:", error);
+        console.error("Error code:", error.code);
+        console.error("Error message:", error.message);
+        console.error("Error details:", error.details);
+        
+        // Show user-friendly error message
+        toast.error("Gagal memulai game. Silakan coba lagi.");
+        return;
       }
-    }, 1000);
+
+      console.log("✅ Game session updated successfully:", data);
+
+      setCountdownLeft(countdownDuration);
+      let secondsLeft = countdownDuration;
+
+      const interval = setInterval(() => {
+        secondsLeft -= 1;
+        setCountdownLeft(secondsLeft);
+
+        if (secondsLeft <= 0) {
+          clearInterval(interval);
+          router.push(`../game/${gameSession.id}`);
+        }
+      }, 1000);
+
+    } catch (err) {
+      console.error("💥 Unexpected error in startCountdownBeforeGame:", err);
+      toast.error("Terjadi kesalahan tidak terduga. Silakan coba lagi.");
+    }
   };
 
   const joinAsHostAndStartCountdown = async () => {
@@ -655,7 +711,7 @@ export default function HostRoomPage() {
       let participantId = existing?.id;
 
       if (!participantId) {
-        const { data: newParticipant } = await supabase
+        const { data: newParticipant, error: insertError } = await supabase
           .from("game_participants")
           .insert({
             session_id: gameSession.id,
@@ -665,6 +721,16 @@ export default function HostRoomPage() {
           .select()
           .single();
 
+        if (insertError) {
+          console.error("❌ Error creating participant:", insertError);
+          setError({
+            type: "unknown",
+            message: "Gagal bergabung sebagai participant",
+            details: insertError.message,
+          });
+          return;
+        }
+
         participantId = newParticipant.id;
       }
 
@@ -672,25 +738,36 @@ export default function HostRoomPage() {
       const now = new Date();
       const startedTime = new Date(now.getTime() + countdownDuration * 1000);
 
-      const { error: updateError } = await supabase
+      console.log("🎮 Host joining and starting countdown for session:", gameSession.id);
+      console.log("⏰ Countdown start time:", now.toISOString());
+      console.log("🚀 Game start time:", startedTime.toISOString());
+
+      const { data, error: updateError } = await supabase
         .from("game_sessions")
         .update({
           countdown_started_at: now.toISOString(),
           started_at: startedTime.toISOString(),
           status: "active",
           total_time_minutes: totalTimeMinutes,
-          // game_end_mode: gameEndMode,
         })
-        .eq("id", gameSession.id);
+        .eq("id", gameSession.id)
+        .select();
 
       if (updateError) {
+        console.error("❌ Database error details:", updateError);
+        console.error("Error code:", updateError.code);
+        console.error("Error message:", updateError.message);
+        console.error("Error details:", updateError.details);
+        
         setError({
           type: "unknown",
           message: "Gagal memulai countdown",
-          details: "Gagal menyimpan waktu mulai",
+          details: "Gagal menyimpan waktu mulai: " + updateError.message,
         });
         return;
       }
+
+      console.log("✅ Game session updated successfully:", data);
 
       setHostParticipantId(participantId);
       setCountdownLeft(countdownDuration);
@@ -706,11 +783,11 @@ export default function HostRoomPage() {
         }
       }, 1000);
     } catch (err) {
-      console.error(err);
+      console.error("💥 Unexpected error in joinAsHostAndStartCountdown:", err);
       setError({
         type: "unknown",
         message: "Gagal memuat quiz",
-        details: "Terjadi kesalahan saat bergabung sebagai host",
+        details: "Terjadi kesalahan saat bergabung sebagai host: " + (err instanceof Error ? err.message : 'Unknown error'),
       });
     } finally {
       setIsJoining(false);
