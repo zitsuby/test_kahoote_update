@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Users, Settings, Maximize, Minimize, Unlock, Volume2, VolumeX } from "lucide-react"
+import { Users, Settings, Maximize, Minimize, Unlock, Volume2, VolumeX, ArrowLeft, Play, Copy, Check, AlertCircle, User, Globe, Lock, Clock } from "lucide-react"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import QRCode from "react-qr-code"
@@ -12,6 +12,10 @@ import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { motion, useTransform, AnimatePresence, useMotionValue, useSpring } from "framer-motion"
+import Link from "next/link"
+import { use } from "react"
+import { GamePageWithLoading } from "@/components/ui/page-with-loading"
 
 export function FullscreenButton() {
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -45,295 +49,846 @@ export function FullscreenButton() {
   )
 }
 
+interface Quiz {
+  id: string;
+  title: string;
+  description: string | null;
+  is_public: boolean;
+  creator_id: string;
+  questions: Array<{
+    id: string;
+    question_text: string;
+    time_limit: number;
+    points: number;
+  }>;
+  profiles: {
+    username: string;
+    avatar_url: string | null;
+  };
+}
+
 interface GameSession {
   id: string;
   game_pin: string;
   status: string;
+  total_time_minutes: number | null;
+  countdown_started_at?: number | null;
+  game_end_mode?: 'first_finish' | 'wait_timer';
   participants: Array<{
     id: string;
     nickname: string;
     joined_at: string;
-    profiles?: {
-      avatar_url?: string | null;
-    } | null;
+    profiles?:
+      | {
+          avatar_url?: string | null;
+        }
+      | Array<{
+          avatar_url?: string | null;
+        }>;
   }>;
 }
 
-export default function HostRoomPage() {
-  const params = useParams()
-  const router = useRouter()
-  const { user } = useAuth()
-  
-  const roomCode = params.code as string
-  const [gameSession, setGameSession] = useState<GameSession | null>(null)
-  const [showCountdown, setShowCountdown] = useState(false)
-  const [countdown, setCountdown] = useState(3)
-  const [copied, setCopied] = useState(false)
-  const [showQRPopup, setShowQRPopup] = useState(false)
-  const [muted, setMuted] = useState(false)
-  const [quizTitle, setQuizTitle] = useState("Game Session")
-  const [participants, setParticipants] = useState<any[]>([])
-  const [totalQuestions, setTotalQuestions] = useState(0)
-  const [gameEndMode, setGameEndMode] = useState<'first_finish' | 'wait_timer'>('wait_timer')
-  const hasCreatedSession = useRef(false)
-  const [totalTimeMinutes, setTotalTimeMinutes] = useState<number>(10); // Tambah state waktu
-  const [showTimeSetup, setShowTimeSetup] = useState(false); // Tambah state untuk menampilkan setup waktu
+interface SupabaseQuizResponse {
+  id: string;
+  title: string;
+  description: string | null;
+  is_public: boolean;
+  creator_id: string;
+  questions: Array<{
+    id: string;
+    question_text: string;
+    time_limit: number;
+    points: number;
+  }>;
+  profiles: {
+    username: string;
+    avatar_url: string | null;
+  };
+}
 
-  // Prefetch game page
+function HostRoomPageContent({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}) {
+  const resolvedParams = use(params);
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [gameSession, setGameSession] = useState<GameSession | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showTimeSetup, setShowTimeSetup] = useState(false);
+  const [totalTimeMinutes, setTotalTimeMinutes] = useState<number>(10);
+  const [gameEndMode, setGameEndMode] = useState<'first_finish' | 'wait_timer'>('wait_timer');
+  const [isJoining, setIsJoining] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const springConfig = { stiffness: 100, damping: 5 };
+  const x = useMotionValue(0);
+  const rotate = useSpring(
+    useTransform(x, [-100, 100], [-15, 15]),
+    springConfig
+  );
+  const translateX = useSpring(
+    useTransform(x, [-100, 100], [-20, 20]),
+    springConfig
+  );
+  const [error, setError] = useState<{
+    type:
+      | "permission"
+      | "not_found"
+      | "no_questions"
+      | "connection"
+      | "unknown";
+    message: string;
+    details?: string;
+  } | null>(null);
+  const hasCreatedSession = useRef(false);
+  const [countdownLeft, setCountdownLeft] = useState<number | null>(null);
+  const countdownDuration = 10;
+  const [hostParticipantId, setHostParticipantId] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<{
+    username: string;
+    avatar_url: string | null;
+  } | null>(null);
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdown, setCountdown] = useState(3);
+  const [showQRPopup, setShowQRPopup] = useState(false);
+  const [muted, setMuted] = useState(false);
+
   useEffect(() => {
-    if (gameSession?.id) {
-      router.prefetch(`../game/${gameSession.id}`)
+    if (user && !gameSession && !hasCreatedSession.current) {
+      hasCreatedSession.current = true;
+      fetchQuizAndCreateSession();
     }
-  }, [router, gameSession])
+  }, [user, gameSession]);
 
-  // Fetch quiz details
   useEffect(() => {
-    const fetchQuizDetails = async () => {
-      if (!roomCode) return
-      
-      try {
-        const { data: sessionData, error: sessionError } = await supabase
-          .from("game_sessions")
-          .select("quiz_id")
-          .eq("game_pin", roomCode)
-          .single()
-          
-        if (sessionError || !sessionData) return
-          
-        const { data: quizData, error: quizError } = await supabase
-          .from("quizzes")
-          .select("title, questions(id)")
-          .eq("id", sessionData.quiz_id)
-          .single()
-          
-        if (!quizError && quizData) {
-          setQuizTitle(quizData.title)
-          setTotalQuestions(quizData.questions?.length || 0)
+    if (!user) {
+      router.push("/dashboard");
+    }
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user, router]);
+
+  useEffect(() => {
+    if (gameSession) {
+      fetchParticipants();
+
+      const channel = supabase
+        .channel(`game_${gameSession.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "game_participants",
+            filter: `session_id=eq.${gameSession.id}`,
+          },
+          (payload) => {
+            console.log("Participant change detected:", payload);
+            fetchParticipants();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [gameSession]);
+
+  useEffect(() => {
+    if (gameSession?.countdown_started_at && gameSession.status === "active") {
+      const interval = setInterval(() => {
+        const now = new Date();
+        const countdownStart = new Date(gameSession.countdown_started_at!);
+        const remaining = Math.max(
+          0,
+          5 - Math.floor((now.getTime() - countdownStart.getTime()) / 1000)
+        );
+
+        setCountdownLeft(remaining);
+
+        if (remaining <= 0) {
+          clearInterval(interval);
+          setCountdownLeft(null);
+          router.push(`/gamemode/submarine/host/game/${gameSession.id}`);
         }
-      } catch (error) {
-        console.error("Error fetching quiz details:", error)
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [gameSession, router]);
+
+  useEffect(() => {
+    if (
+      gameSession?.countdown_started_at &&
+      hostParticipantId &&
+      gameSession.status === "waiting"
+    ) {
+      const startTime = new Date(gameSession.countdown_started_at).getTime();
+      const now = Date.now();
+      const diff = Math.ceil((startTime + 5000 - now) / 1000);
+
+      if (diff <= 0) {
+        router.push(
+          `/gamemode/submarine/player/play?participant=${hostParticipantId}`
+        );
+      } else {
+        setCountdownLeft(diff);
+        const interval = setInterval(() => {
+          setCountdownLeft((prev) => {
+            if (prev && prev > 1) return prev - 1;
+
+            clearInterval(interval);
+            router.push(
+              `/gamemode/submarine/player/play?participant=${hostParticipantId}`
+            );
+            return 0;
+          });
+        }, 1000);
+        return () => clearInterval(interval);
       }
     }
-    
-    fetchQuizDetails()
-  }, [roomCode])
+  }, [gameSession?.countdown_started_at, hostParticipantId]);
 
-  // Create game session
-  useEffect(() => {
-    const createGameSession = async () => {
-      if (!user || !roomCode || hasCreatedSession.current) return;
-      
-      try {
-        hasCreatedSession.current = true;
-        
-        // 1. Cari quiz berdasarkan roomCode (kode quiz)
-        const { data: quizData, error: quizError } = await supabase
-          .from("quizzes")
-          .select("id")
-          .eq("code", roomCode) // Gunakan kolom code untuk mencari quiz
-          .single();
-        
-        if (quizError || !quizData) {
-          throw new Error(quizError?.message || "Quiz not found");
+  const fetchUserProfile = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("username, avatar_url")
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching profile:", error);
+        return;
+      }
+
+      setUserProfile(data);
+    } catch (error) {
+      console.error("Error in fetchUserProfile:", error);
+    }
+  };
+
+  const displayName = useMemo(() => {
+    if (userProfile?.username) return userProfile.username;
+    if (user && user.email) return user.email.split("@")[0];
+    return "User";
+  }, [userProfile, user]);
+
+  const fetchQuizAndCreateSession = async () => {
+    try {
+      console.log("🔍 Fetching quiz with code:", resolvedParams.code);
+      console.log("👤 Current user:", user?.id);
+
+      if (gameSession) {
+        console.log("⛔ Game session sudah ada, tidak membuat ulang.");
+        return;
+      }
+      if (!user?.id) {
+        throw new Error("User not authenticated");
+      }
+
+      if (!resolvedParams.code) {
+        throw new Error("Quiz code is required");
+      }
+
+      const { data: testData, error: testError } = await supabase
+        .from("quizzes")
+        .select("id")
+        .limit(1);
+
+      if (testError) {
+        console.error("❌ Supabase connection test failed:", testError);
+        setError({
+          type: "connection",
+          message: "Tidak dapat terhubung ke database",
+          details: testError.message,
+        });
+        return;
+      }
+
+      console.log("✅ Supabase connection test passed");
+
+      const { data: quizData, error: quizError } = await supabase
+        .from("quizzes")
+        .select(
+          `
+          id,
+          title,
+          description,
+          is_public,
+          creator_id,
+          questions (
+            id,
+            question_text,
+            time_limit,
+            points
+          ),
+          profiles!quizzes_creator_id_fkey (
+            username,
+            avatar_url
+          )
+        `
+        )
+        .eq("code", resolvedParams.code)
+        .single();
+
+      console.log("📊 Quiz query result:", { quizData, quizError });
+
+      if (quizError) {
+        console.error("❌ Quiz fetch error:", quizError);
+        if (quizError.code === "PGRST116") {
+          setError({
+            type: "not_found",
+            message: "Quiz tidak ditemukan",
+            details: "Quiz dengan kode tersebut tidak ada dalam database",
+          });
+        } else {
+          setError({
+            type: "unknown",
+            message: "Gagal memuat quiz",
+            details: quizError.message,
+          });
         }
-        
-        const quizId = quizData.id;
+        return;
+      }
 
-        // 2. Generate unique PIN
-        const generateUniquePin = async () => {
-          let isUnique = false;
-          let newPin = "";
-          
-          while (!isUnique) {
-            newPin = Math.floor(100000 + Math.random() * 900000).toString();
-            
-            const { data: existingSession, error } = await supabase
-              .from("game_sessions")
-              .select("id")
-              .eq("game_pin", newPin)
-              .maybeSingle();
-            
-            if (!existingSession && !error) {
-              isUnique = true;
+      if (!quizData) {
+        setError({
+          type: "not_found",
+          message: "Quiz tidak ditemukan",
+          details: "Data quiz tidak tersedia",
+        });
+        return;
+      }
+
+      const quiz = quizData as unknown as SupabaseQuizResponse;
+
+      console.log("🎯 Quiz details:", {
+        id: quiz.id,
+        title: quiz.title,
+        creator_id: quiz.creator_id,
+        is_public: quiz.is_public,
+        current_user: user.id,
+        is_creator: quiz.creator_id === user.id,
+      });
+
+      const isCreator = quiz.creator_id === user.id;
+      const isPublic = quiz.is_public;
+
+      if (!isCreator && !isPublic) {
+        console.log("❌ Permission denied: Private quiz, not creator");
+        setError({
+          type: "permission",
+          message: "Tidak dapat menghost quiz ini",
+          details:
+            "Quiz ini bersifat private dan hanya dapat dihost oleh pembuatnya",
+        });
+        return;
+      }
+
+      if (!quiz.questions || quiz.questions.length === 0) {
+        setError({
+          type: "no_questions",
+          message: "Quiz tidak memiliki pertanyaan",
+          details: "Tambahkan pertanyaan terlebih dahulu sebelum menghost quiz",
+        });
+        return;
+      }
+
+      console.log("✅ Permission check passed - User can host this quiz");
+
+      const processedQuiz: Quiz = {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        is_public: quiz.is_public,
+        creator_id: quiz.creator_id,
+        questions: quiz.questions,
+        profiles: {
+          username: quiz.profiles.username,
+          avatar_url: quiz.profiles.avatar_url || null,
+        },
+      };
+
+      setQuiz(processedQuiz);
+
+      console.log("🎮 Creating game session...");
+      const gamePin = Math.floor(100000 + Math.random() * 900000).toString();
+
+      const { data: session, error: createSessionError } = await supabase
+        .from("game_sessions")
+        .insert({
+          quiz_id: resolvedParams.code,
+          host_id: user.id,
+          game_pin: gamePin,
+          status: "waiting",
+          total_time_minutes: null,
+          game_end_mode: gameEndMode,
+        })
+        .select()
+        .single();
+
+      if (createSessionError) {
+        console.error("❌ Session creation error:", createSessionError);
+        throw createSessionError;
+      }
+
+      console.log("✅ Game session created:", session);
+
+      setGameSession({
+        id: session.id,
+        game_pin: session.game_pin,
+        status: session.status,
+        total_time_minutes: session.total_time_minutes,
+        game_end_mode: session.game_end_mode || gameEndMode,
+        participants: [],
+      });
+    } catch (error) {
+      console.error("💥 Error in fetchQuizAndCreateSession:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+
+      if (!error || typeof error !== "object") {
+        setError({
+          type: "unknown",
+          message: "Terjadi kesalahan tidak dikenal",
+          details: errorMessage,
+        });
+      } else if (errorMessage.includes("not authenticated")) {
+        setError({
+          type: "permission",
+          message: "Sesi login telah berakhir",
+          details: "Silakan login ulang untuk melanjutkan",
+        });
+      } else if (errorMessage.includes("connection")) {
+        setError({
+          type: "connection",
+          message: "Masalah koneksi database",
+          details: "Periksa koneksi internet dan coba lagi",
+        });
+      } else {
+        setError({
+          type: "unknown",
+          message: "Gagal menyiapkan game",
+          details: errorMessage,
+        });
+      }
+    }
+  };
+
+  const fetchParticipants = async () => {
+    if (!gameSession) return;
+
+    try {
+      console.log("Fetching participants for session:", gameSession.id);
+
+      const { data, error } = await supabase
+        .from("game_participants")
+        .select(
+          `
+          id, 
+          nickname,
+          joined_at,
+          profiles (
+          avatar_url
+          )
+          `
+        )
+        .eq("session_id", gameSession.id)
+        .order("joined_at", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching participants:", error);
+        throw error;
+      }
+
+      console.log("Fetched participants:", data);
+
+      setGameSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              participants: data || [],
             }
-          }
-          return newPin;
-        };
+          : null
+      );
+    } catch (error) {
+      console.error("Error fetching participants:", error);
+    }
+  };
 
-        // 3. Check if session already exists
-        const { data: existingSession, error: sessionError } = await supabase
-          .from("game_sessions")
-          .select("*")
-          .eq("quiz_id", quizId)
-          .eq("host_id", user.id)
-          .eq("status", "waiting")
-          .maybeSingle();
-        
-        if (sessionError) throw sessionError;
-        
-        if (existingSession) {
-          setGameSession(existingSession as GameSession);
-          return;
-        }
-        
-        // 4. Create new session dengan PIN baru
-        const newGamePin = await generateUniquePin();
-        
-        const { data: newSession, error: createError } = await supabase
-          .from("game_sessions")
+  const copyGamePin = async () => {
+    if (!gameSession) return;
+
+    try {
+      await navigator.clipboard.writeText(gameSession.game_pin);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Game PIN copied!");
+    } catch (error) {
+      console.error("Failed to copy:", error);
+      toast.error("Failed to copy PIN");
+    }
+  };
+
+  const handleMouseMove = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const halfWidth = rect.width / 2;
+    x.set(event.clientX - rect.left - halfWidth);
+  };
+
+  const handleStartGame = () => {
+    if (!gameSession || gameSession.participants.length === 0) return;
+    setShowTimeSetup(true);
+  };
+
+  const startCountdownBeforeGame = async () => {
+    if (!gameSession || !totalTimeMinutes) return;
+
+    const countdownStartTime = new Date();
+    const startedTime = new Date(
+      countdownStartTime.getTime() + countdownDuration * 1000
+    );
+
+    const { error } = await supabase
+      .from("game_sessions")
+      .update({
+        countdown_started_at: countdownStartTime.toISOString(),
+        started_at: startedTime.toISOString(),
+        status: "active",
+        total_time_minutes: totalTimeMinutes,
+      })
+      .eq("id", gameSession.id);
+
+    if (error) {
+      console.error("Gagal menyimpan waktu countdown:", error);
+      return;
+    }
+
+    setCountdownLeft(countdownDuration);
+    let secondsLeft = countdownDuration;
+
+    const interval = setInterval(() => {
+      secondsLeft -= 1;
+      setCountdownLeft(secondsLeft);
+
+      if (secondsLeft <= 0) {
+        clearInterval(interval);
+        router.push(`/gamemode/submarine/host/game/${gameSession.id}`);
+      }
+    }, 1000);
+  };
+
+  const joinAsHostAndStartCountdown = async () => {
+    if (!gameSession) return;
+
+    setIsJoining(true);
+    setError(null);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setError({
+          type: "unknown",
+          message: "Gagal memuat quiz",
+          details: "tidak ada user yang terautentikasi",
+        });
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile) {
+        setError({
+          type: "unknown",
+          message: "Gagal memuat quiz",
+          details: "tidak ada profil yang ditemukan",
+        });
+        return;
+      }
+
+      const { data: existing } = await supabase
+        .from("game_participants")
+        .select("id")
+        .eq("session_id", gameSession.id)
+        .eq("nickname", profile.username)
+        .maybeSingle();
+
+      let participantId = existing?.id;
+
+      if (!participantId) {
+        const { data: newParticipant } = await supabase
+          .from("game_participants")
           .insert({
-            quiz_id: quizId,
-            host_id: user.id,
-            game_pin: newGamePin,
-            status: "waiting",
-            game_end_mode: gameEndMode,
-            total_time_minutes: totalTimeMinutes
+            session_id: gameSession.id,
+            user_id: user.id,
+            nickname: profile.username,
           })
           .select()
           .single();
-        
-        if (createError) {
-          throw new Error(`Failed to create session: ${createError.message}`);
+
+        participantId = newParticipant.id;
+      }
+
+      const countdownDuration = 10;
+      const now = new Date();
+      const startedTime = new Date(now.getTime() + countdownDuration * 1000);
+
+      const { error: updateError } = await supabase
+        .from("game_sessions")
+        .update({
+          countdown_started_at: now.toISOString(),
+          started_at: startedTime.toISOString(),
+          status: "active",
+          total_time_minutes: totalTimeMinutes,
+        })
+        .eq("id", gameSession.id);
+
+      if (updateError) {
+        setError({
+          type: "unknown",
+          message: "Gagal memulai countdown",
+          details: "Gagal menyimpan waktu mulai",
+        });
+        return;
+      }
+
+      setHostParticipantId(participantId);
+      setCountdownLeft(countdownDuration);
+
+      let secondsLeft = countdownDuration;
+      const interval = setInterval(() => {
+        secondsLeft -= 1;
+        setCountdownLeft(secondsLeft);
+
+        if (secondsLeft <= 0) {
+          clearInterval(interval);
+          router.push(
+            `/gamemode/submarine/player/play?participant=${participantId}`
+          );
         }
-        
-        setGameSession(newSession as GameSession);
-      } catch (error: any) {
-        console.error("Error creating game session:", error);
-        toast.error(`Failed to create game session: ${error.message || "Unknown error"}`);
-        
-        // Reset flag agar bisa mencoba lagi
-        hasCreatedSession.current = false;
-      }
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      setError({
+        type: "unknown",
+        message: "Gagal memuat quiz",
+        details: "Terjadi kesalahan saat bergabung sebagai host",
+      });
+    } finally {
+      setIsJoining(false);
     }
-    
-    if (user) {
-      createGameSession();
-    }
-  }, [user, roomCode, gameEndMode, totalTimeMinutes]);
-
-  // Subscribe to participant changes
-  useEffect(() => {
-    if (!gameSession?.id) return
-    
-    const fetchParticipants = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("game_participants")
-          .select(`
-            id, 
-            nickname,
-            joined_at,
-            profiles (
-              avatar_url
-            )
-          `)
-          .eq("session_id", gameSession.id)
-          .order("joined_at", { ascending: true })
-          
-        if (error) throw error
-        
-        setParticipants(data || [])
-      } catch (error) {
-        console.error("Error fetching participants:", error)
-      }
-    }
-    
-    fetchParticipants()
-    
-    const channel = supabase
-      .channel(`game_${gameSession.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "game_participants",
-          filter: `session_id=eq.${gameSession.id}`,
-        },
-        () => fetchParticipants()
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [gameSession])
+  };
 
   const startGame = async () => {
-    if (!gameSession || participants.length === 0) return
+    if (!gameSession || gameSession.participants.length === 0) return;
     
     try {
-      setShowCountdown(true)
-      setCountdown(3)
+      setShowCountdown(true);
+      setCountdown(3);
       
-      // Update session status
       await supabase
         .from("game_sessions")
         .update({
           status: "active",
           game_end_mode: gameEndMode,
-          total_time_minutes: totalTimeMinutes // Tambahkan waktu
+          total_time_minutes: totalTimeMinutes
         })
-        .eq("id", gameSession.id)
+        .eq("id", gameSession.id);
         
-      // Countdown effect
-      let counter = 3
+      let counter = 3;
       const countdownInterval = setInterval(() => {
-        counter -= 1
-        setCountdown(counter)
+        counter -= 1;
+        setCountdown(counter);
         
         if (counter === 0) {
-          clearInterval(countdownInterval)
-          router.push(`../game/${gameSession.id}`)
+          clearInterval(countdownInterval);
+          router.push(`/gamemode/submarine/host/game/${gameSession.id}`);
         }
-      }, 1000)
+      }, 1000);
       
     } catch (error) {
-      console.error("Error starting game:", error)
-      toast.error("Failed to start game")
+      console.error("Error starting game:", error);
+      toast.error("Failed to start game");
     }
-  }
-
-  
-
-  const copyGamePin = async () => {
-    if (!gameSession) return
-
-    try {
-      await navigator.clipboard.writeText(gameSession.game_pin)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-      toast.success("Game PIN copied!")
-    } catch (error) {
-      toast.error("Failed to copy PIN")
-    }
-  }
+  };
 
   const toggleMute = () => {
-    setMuted((prev) => !prev)
-    const audio = document.getElementById("bg-audio") as HTMLAudioElement
+    setMuted((prev) => !prev);
+    const audio = document.getElementById("bg-audio") as HTMLAudioElement;
     if (audio) {
-      audio.muted = !audio.muted
+      audio.muted = !audio.muted;
     }
-  }
+  };
 
   const endSession = async () => {
-    if (!gameSession) return
+    if (!gameSession) return;
 
     try {
-      await supabase
+      const { error } = await supabase
         .from("game_sessions")
-        .update({ status: "finished" })
-        .eq("id", gameSession.id)
-        
-      router.push("/dashboard")
+        .update({
+          status: "finished",
+          ended_at: new Date().toISOString(),
+        })
+        .eq("id", gameSession.id);
+
+      if (error) throw error;
+
+      const { data: latestParticipants, error: participantsError } =
+        await supabase
+          .from("game_participants")
+          .select("id, nickname")
+          .eq("session_id", gameSession.id);
+
+      if (participantsError) {
+        console.error("Error fetching latest participants:", participantsError);
+      } else if (latestParticipants && latestParticipants.length > 0) {
+        console.log(
+          `Calculating scores for ${latestParticipants.length} participants`
+        );
+        await Promise.all(
+          latestParticipants.map(async (participant) => {
+            try {
+              await supabase.rpc("calculate_score", {
+                session_id_input: gameSession.id,
+                participant_id_input: participant.id,
+              });
+              console.log(`Score calculated for ${participant.nickname}`);
+            } catch (err) {
+              console.error(
+                `Error calculating score for ${participant.nickname}:`,
+                err
+              );
+            }
+          })
+        );
+      }
+
+      router.push("/dashboard");
     } catch (error) {
-      console.error("Error ending session:", error)
-      toast.error("Failed to end session")
+      console.error("Error ending session:", error);
     }
+  };
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="mb-4">
+            <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              {error.message}
+            </h2>
+            <p className="text-gray-600 mb-4 text-sm">{error.details}</p>
+          </div>
+
+          <div className="space-y-3">
+            {error.type === "permission" && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+                <h3 className="font-semibold text-blue-800 mb-2">Solusi:</h3>
+                <ul className="text-blue-700 text-sm space-y-1">
+                  <li>
+                    • Minta pembuat quiz untuk mengubah status menjadi public
+                  </li>
+                  <li>• Atau login dengan akun pembuat quiz</li>
+                  <li>• Hubungi pembuat quiz untuk mendapatkan akses</li>
+                </ul>
+              </div>
+            )}
+
+            {error.type === "not_found" && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left">
+                <h3 className="font-semibold text-yellow-800 mb-2">
+                  Kemungkinan penyebab:
+                </h3>
+                <ul className="text-yellow-700 text-sm space-y-1">
+                  <li>• Quiz telah dihapus</li>
+                  <li>• Link yang digunakan tidak valid</li>
+                  <li>• Quiz belum dipublikasikan</li>
+                </ul>
+              </div>
+            )}
+
+            {error.type === "no_questions" && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-left">
+                <h3 className="font-semibold text-orange-800 mb-2">
+                  Yang perlu dilakukan:
+                </h3>
+                <ul className="text-orange-700 text-sm space-y-1">
+                  <li>• Buka halaman edit quiz</li>
+                  <li>• Tambahkan minimal 1 pertanyaan</li>
+                  <li>• Simpan perubahan</li>
+                  <li>• Coba host ulang</li>
+                </ul>
+              </div>
+            )}
+
+            <div className="flex space-x-2">
+              <Button
+                onClick={fetchQuizAndCreateSession}
+                variant="outline"
+                className="flex-1 bg-transparent border-gray-300 text-gray-700 hover:bg-gray-100"
+              >
+                Coba Lagi
+              </Button>
+              <Button
+                onClick={() => router.push("/dashboard")}
+                className="flex-1 bg-purple-600 hover:bg-purple-700"
+              >
+                Kembali ke Dashboard
+              </Button>
+            </div>
+          </div>
+
+          {error.type === "connection" && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-xs text-left">
+              <p className="font-semibold text-red-800">Tips Debugging:</p>
+              <ul className="text-red-700 mt-1 space-y-1">
+                <li>• Periksa koneksi internet</li>
+                <li>• Refresh halaman</li>
+                <li>• Coba beberapa saat lagi</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
-  const formattedGamePin = gameSession?.game_pin?.replace(/(\d{3})(\d{3})/, "$1 $2") || ""
+  if (!quiz || !gameSession) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Quiz tidak ditemukan
+          </h2>
+          <Link href="/dashboard">
+            <Button className="bg-purple-600 hover:bg-purple-700">
+              Kembali ke Dashboard
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const isCreator = quiz.creator_id === user?.id;
+  const formattedGamePin = gameSession?.game_pin?.replace(/(\d{3})(\d{3})/, "$1 $2") || "";
 
   return (
     <div className="min-h-screen overflow-hidden">
@@ -413,9 +968,9 @@ export default function HostRoomPage() {
                 >
                   {formattedGamePin}
                 </h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  {quizTitle} • {totalQuestions} questions
-                </p>
+                                  <p className="text-sm text-gray-600 mt-1">
+                    {quiz.title} • {quiz.questions.length} questions
+                  </p>
               </div>
               <div 
                 className="bg-white p-1 rounded-sm cursor-pointer" 
@@ -551,7 +1106,7 @@ export default function HostRoomPage() {
             </div>
 
             {/* Additional players grid */}
-            {participants.length === 0 && (
+            {gameSession.participants.length === 0 && (
               <div className="flex justify-center">
                 <p className="bg-blue-600 p-1 px-2 rounded-sm text-2xl font-medium text-white">
                   Waiting for participants
@@ -559,9 +1114,9 @@ export default function HostRoomPage() {
               </div>
             )}
             
-            {participants.length > 4 && (
+            {gameSession.participants.length > 4 && (
               <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 mt-8">
-                {participants.slice(4).map((player) => (
+                {gameSession.participants.slice(4).map((player) => (
                   <div key={player.id} className="flex flex-col items-center">
                     <Avatar className="w-12 h-12 border-2 border-white shadow-lg">
                       <AvatarImage 
@@ -588,7 +1143,7 @@ export default function HostRoomPage() {
         <div className="flex p-2 px-5 gap-2 text-white justify-end items-center">
           <div className="flex items-center gap-1 bg-black p-2 rounded-lg">
             <Users className="w-5 h-5" />
-            <span className="font-semibold text-sm">{participants.length}</span>
+            <span className="font-semibold text-sm">{gameSession.participants.length}</span>
           </div>
           <div className="flex items-center gap-3 p-2 text-white bg-black backdrop-blur-sm rounded-lg">
             <Button
@@ -608,5 +1163,20 @@ export default function HostRoomPage() {
         </div>
       </div>
     </div>
-  )
+  );
+}
+
+export default function HostRoomPage({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}) {
+  return (
+    <GamePageWithLoading 
+      animation="slide"
+      customLoadingMessage="Memuat ruang submarine..."
+    >
+      <HostRoomPageContent params={params} />
+    </GamePageWithLoading>
+  );
 }
