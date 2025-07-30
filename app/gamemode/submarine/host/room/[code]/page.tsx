@@ -82,6 +82,14 @@ interface Quiz {
     question_text: string;
     time_limit: number;
     points: number;
+    order_index: number;
+    answers: Array<{
+      id: string;
+      answer_text: string;
+      is_correct: boolean;
+      color: string;
+      order_index: number;
+    }>;
   }>;
   profiles: {
     username: string;
@@ -121,6 +129,14 @@ interface SupabaseQuizResponse {
     question_text: string;
     time_limit: number;
     points: number;
+    order_index?: number;
+    answers?: Array<{
+      id: string;
+      answer_text: string;
+      is_correct: boolean;
+      color: string;
+      order_index?: number;
+    }>;
   }>;
   profiles: {
     username: string;
@@ -334,7 +350,15 @@ export default function HostRoomPage() {
             id,
             question_text,
             time_limit,
-            points
+            points,
+            order_index,
+            answers (
+              id,
+              answer_text,
+              is_correct,
+              color,
+              order_index
+            )
           ),
           profiles!quizzes_creator_id_fkey (
             username,
@@ -342,7 +366,7 @@ export default function HostRoomPage() {
           )
         `
         )
-        .eq("id", roomCode) // Use code instead of id for submarine mode
+        .eq("id", roomCode) // Use code as quiz ID for submarine mode
         .single();
 
       console.log("📊 Quiz query result:", { quizData, quizError });
@@ -416,7 +440,20 @@ export default function HostRoomPage() {
         description: quiz.description,
         is_public: quiz.is_public,
         creator_id: quiz.creator_id,
-        questions: quiz.questions,
+        questions: quiz.questions.map(q => ({
+          id: q.id,
+          question_text: q.question_text,
+          time_limit: q.time_limit,
+          points: q.points,
+          order_index: q.order_index || 0,
+          answers: (q.answers || []).map(a => ({
+            id: a.id,
+            answer_text: a.answer_text,
+            is_correct: a.is_correct,
+            color: a.color,
+            order_index: a.order_index || 0
+          }))
+        })),
         profiles: {
           username: quiz.profiles.username,
           avatar_url: quiz.profiles.avatar_url || null,
@@ -439,6 +476,7 @@ export default function HostRoomPage() {
           status: "waiting",
           total_time_minutes: null,
           game_end_mode: gameEndMode,
+          game_mode: "submarine", // Set game mode to submarine
         })
         .select()
         .single();

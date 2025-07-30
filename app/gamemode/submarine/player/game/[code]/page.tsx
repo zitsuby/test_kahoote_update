@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -11,118 +11,216 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
 import { Settings, Volume2, VolumeX } from "lucide-react"
 import { FullscreenButton } from "@/app/host/room/[code]/page"
+import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
 
-// Emoji objects for the image challenge
-const emojiObjects = [
-  { emoji: "🍎", name: "Apple" },
-  { emoji: "🚗", name: "Car" },
-  { emoji: "📱", name: "Phone" },
-  { emoji: "⚽", name: "Ball" },
-  { emoji: "🏠", name: "House" },
-  { emoji: "📚", name: "Book" },
-  { emoji: "☂️", name: "Umbrella" },
-  { emoji: "👟", name: "Shoe" },
-  { emoji: "🎸", name: "Guitar" },
-  { emoji: "💻", name: "Laptop" },
-  { emoji: "🍕", name: "Pizza" },
-  { emoji: "🌸", name: "Flower" },
-  { emoji: "🎒", name: "Backpack" },
-  { emoji: "⌚", name: "Watch" },
-  { emoji: "🔑", name: "Key" },
-  { emoji: "🍌", name: "Banana" },
-  { emoji: "🚲", name: "Bicycle" },
-  { emoji: "📷", name: "Camera" },
-  { emoji: "🎯", name: "Target" },
-  { emoji: "🧸", name: "Teddy Bear" },
-]
+interface Question {
+  id: string;
+  question_text: string;
+  time_limit: number;
+  points: number;
+  order_index: number;
+  answers: Array<{
+    id: string;
+    answer_text: string;
+    is_correct: boolean;
+    color: string;
+    order_index: number;
+  }>;
+}
 
-// All 9 questions
-const allQuestions = [
-  { id: 1, text: "Berapa hasil dari 15 + 27?", options: ["42", "41", "43", "40"], correctAnswer: 0 },
-  { id: 2, text: "Apa ibu kota Indonesia?", options: ["Jakarta", "Bandung", "Surabaya", "Medan"], correctAnswer: 0 },
-  { id: 3, text: "Berapa hasil dari 8 × 7?", options: ["54", "56", "58", "52"], correctAnswer: 1 },
-  {
-    id: 4,
-    text: "Siapa presiden pertama Indonesia?",
-    options: ["Soekarno", "Soeharto", "Habibie", "Megawati"],
-    correctAnswer: 0,
-  },
-  { id: 5, text: "Berapa hasil dari 144 ÷ 12?", options: ["11", "12", "13", "14"], correctAnswer: 1 },
-  {
-    id: 6,
-    text: "Planet terdekat dengan matahari?",
-    options: ["Venus", "Merkurius", "Mars", "Bumi"],
-    correctAnswer: 1,
-  },
-  { id: 7, text: "Berapa hasil dari 9²?", options: ["81", "72", "90", "63"], correctAnswer: 0 },
-  { id: 8, text: "Benua terbesar di dunia?", options: ["Afrika", "Amerika", "Asia", "Eropa"], correctAnswer: 2 },
-  { id: 9, text: "Berapa hasil dari 15 × 4?", options: ["50", "55", "60", "65"], correctAnswer: 2 },
-]
+interface GameSession {
+  id: string;
+  quiz_id: string;
+  status: string;
+  total_time_minutes: number;
+  started_at: string;
+  ended_at: string | null;
+}
+
+interface ParticipantData {
+  id: string;
+  fire_charges: number;
+  hold_button_uses: number;
+  correct_streak: number;
+  wrong_streak: number;
+  shark_distance: number;
+  score: number;
+}
 
 export default function PlayerGamePage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const roomCode = params.code as string
+  const sessionId = params.code as string
+  const participantId = searchParams.get("participant") || ""
   const nickname = searchParams.get("nickname") || ""
   const avatar = searchParams.get("avatar") || ""
 
   // Game state
-  const [timeRemaining, setTimeRemaining] = useState(120)
-  const [gamePhase, setGamePhase] = useState<"questions" | "hold" | "loading" | "images">("questions")
-  const [isCaptain, setIsCaptain] = useState(Math.random() < 0.5)
-
-  // Global fire charges - 3 charges needed for hold button
-  const [fireCharges, setFireCharges] = useState(0) // 0-3 charges
-  const [holdButtonUnlocked, setHoldButtonUnlocked] = useState(false)
-  const [holdButtonUsed, setHoldButtonUsed] = useState(0) // Track how many times hold button was used
-
-  // Question management - cycle through all questions
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0) // 0-8 for all questions
-  const [wrongQuestions, setWrongQuestions] = useState<number[]>([]) // Track wrong questions
+  const [gameSession, setGameSession] = useState<GameSession | null>(null)
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [participantData, setParticipantData] = useState<ParticipantData | null>(null)
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
-  const [isRetryPhase, setIsRetryPhase] = useState(false) // Retrying wrong questions
-  const [questionOrder, setQuestionOrder] = useState([0, 1, 2, 3, 4, 5, 6, 7, 8]) // Current order of questions
-  const [completedCycles, setCompletedCycles] = useState(0)
-
-  // Hold button state
+  const [timeRemaining, setTimeRemaining] = useState(0)
+  const [loading, setLoading] = useState(true)
+  
+  // Submarine specific states
+  const [gamePhase, setGamePhase] = useState<"questions" | "hold" | "finished">("questions")
   const [holdProgress, setHoldProgress] = useState(0)
   const [isHolding, setIsHolding] = useState(false)
+  const [canUseHoldButton, setCanUseHoldButton] = useState(false)
 
-  // Image challenge state
-  const [imageTimer, setImageTimer] = useState(15)
-  const [currentImageChallenge, setCurrentImageChallenge] = useState({
-    correctEmoji: "🍎",
-    options: ["🍎", "🚗", "📱", "⚽"],
-  })
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Timer countdown effect
-  useEffect(() => {
-    if (timeRemaining <= 0) return
+  // Fetch initial game data
+  const fetchGameData = useCallback(async () => {
+    try {
+      setLoading(true)
 
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => prev - 1)
-    }, 1000)
+      // Fetch game session
+      const { data: sessionData, error: sessionError } = await supabase
+        .from("game_sessions")
+        .select("*")
+        .eq("id", sessionId)
+        .single()
 
-    return () => clearInterval(timer)
-  }, [timeRemaining])
+      if (sessionError) throw sessionError
 
-  useEffect(() => {
-    // Prefetch halaman result (biar cepat saat waktunya habis)
-    router.prefetch(
-      `/player/results/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
-    )
+      setGameSession(sessionData)
 
-    // Kalau waktu habis → redirect ke results
-    if (timeRemaining <= 0) {
-      router.push(
-        `/player/results/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
-      )
+      // Fetch questions
+      const { data: questionsData, error: questionsError } = await supabase
+        .from("questions")
+        .select(`
+          id,
+          question_text,
+          time_limit,
+          points,
+          order_index,
+          answers (
+            id,
+            answer_text,
+            is_correct,
+            color,
+            order_index
+          )
+        `)
+        .eq("quiz_id", sessionData.quiz_id)
+        .order("order_index")
+
+      if (questionsError) throw questionsError
+
+      setQuestions(questionsData || [])
+
+      // Fetch participant data
+      const { data: participantInfo, error: participantError } = await supabase
+        .from("game_participants")
+        .select("id, fire_charges, hold_button_uses, correct_streak, wrong_streak, shark_distance, score")
+        .eq("id", participantId)
+        .single()
+
+      if (participantError) throw participantError
+
+      setParticipantData(participantInfo)
+      setCanUseHoldButton(participantInfo.fire_charges >= 3)
+
+    } catch (error) {
+      console.error("Error fetching game data:", error)
+      toast.error("Gagal memuat data game")
+    } finally {
+      setLoading(false)
     }
-  }, [timeRemaining, roomCode, nickname, avatar, router])
+  }, [sessionId, participantId])
 
+  // Setup real-time subscriptions
+  const setupSubscriptions = useCallback(() => {
+    const channel = supabase
+      .channel(`submarine_game_${sessionId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "game_participants",
+          filter: `id=eq.${participantId}`,
+        },
+        (payload) => {
+          console.log("Participant data updated:", payload)
+          if (payload.new) {
+            setParticipantData(payload.new as ParticipantData)
+            setCanUseHoldButton((payload.new as ParticipantData).fire_charges >= 3)
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "game_sessions",
+          filter: `id=eq.${sessionId}`,
+        },
+        (payload) => {
+          console.log("Game session updated:", payload)
+          if (payload.new) {
+            setGameSession(payload.new as GameSession)
+          }
+        }
+      )
+      .subscribe()
 
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [sessionId, participantId])
+
+  // Timer effect
+  useEffect(() => {
+    if (gameSession && gameSession.status === "active" && gameSession.started_at) {
+      const updateTimer = () => {
+        const now = new Date()
+        const startTime = new Date(gameSession.started_at)
+        const totalTimeMs = gameSession.total_time_minutes * 60 * 1000
+        const endTime = new Date(startTime.getTime() + totalTimeMs)
+        const remaining = Math.max(0, endTime.getTime() - now.getTime())
+        const timeLeftSeconds = Math.ceil(remaining / 1000)
+
+        setTimeRemaining(timeLeftSeconds)
+
+        if (timeLeftSeconds <= 0) {
+          // Game ended
+          router.push(
+            `/gamemode/submarine/player/results/${sessionId}?participant=${participantId}&nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
+          )
+        }
+      }
+
+      updateTimer()
+      timerRef.current = setInterval(updateTimer, 1000)
+
+      return () => {
+        if (timerRef.current) {
+          clearInterval(timerRef.current)
+        }
+      }
+    }
+  }, [gameSession, router, sessionId, participantId, nickname, avatar])
+
+  // Initialize component
+  useEffect(() => {
+    fetchGameData()
+    const unsubscribe = setupSubscriptions()
+
+    return () => {
+      unsubscribe()
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+      }
+    }
+  }, [fetchGameData, setupSubscriptions])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -130,189 +228,129 @@ export default function PlayerGamePage() {
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  // Generate random image challenge
-  const generateImageChallenge = () => {
-    const shuffled = [...emojiObjects].sort(() => Math.random() - 0.5)
-    const correct = shuffled[0]
-    const wrong = shuffled.slice(1, 4)
-    const options = [correct, ...wrong].sort(() => Math.random() - 0.5)
+  const handleAnswerSelect = async (answerIndex: number) => {
+    if (selectedAnswer !== null || !questions[currentQuestionIndex]) return
 
-    setCurrentImageChallenge({
-      correctEmoji: correct.emoji,
-      options: options.map((obj) => obj.emoji),
-    })
-  }
+    setSelectedAnswer(answerIndex)
+    
+    const currentQuestion = questions[currentQuestionIndex]
+    const selectedAnswerData = currentQuestion.answers[answerIndex]
+    const isCorrect = selectedAnswerData.is_correct
 
-  // Get current question
-  const getCurrentQuestion = () => {
-    if (isRetryPhase) {
-      // During retry, get question from wrong questions list
-      const wrongQuestionIndex = wrongQuestions[currentQuestionIndex]
-      return allQuestions[wrongQuestionIndex]
-    } else {
-      // Normal phase, get question from current order
-      const questionIndex = questionOrder[currentQuestionIndex]
-      return allQuestions[questionIndex]
-    }
-  }
+    try {
+      // Record the response
+      const { error: responseError } = await supabase
+        .from("game_responses")
+        .insert({
+          session_id: sessionId,
+          participant_id: participantId,
+          question_id: currentQuestion.id,
+          answer_id: selectedAnswerData.id,
+          response_time: currentQuestion.time_limit * 1000, // Convert to milliseconds
+          points_earned: isCorrect ? currentQuestion.points : 0,
+        })
 
-  // Move to next question
-  const moveToNextQuestion = () => {
-    if (isRetryPhase) {
-      // In retry phase
-      if (currentQuestionIndex < wrongQuestions.length - 1) {
-        setCurrentQuestionIndex(currentQuestionIndex + 1)
-      } else {
-        // Finished retrying all wrong questions, start new cycle
-        setIsRetryPhase(false)
-        setWrongQuestions([])
-        setCurrentQuestionIndex(0)
-        setCompletedCycles((prev) => prev + 1)
+      if (responseError) throw responseError
 
-        // Shuffle questions for next cycle
-        const shuffled = [...questionOrder].sort(() => Math.random() - 0.5)
-        setQuestionOrder(shuffled)
+      // Update shark distance and streaks
+      const { error: sharkError } = await supabase.rpc("update_shark_distance", {
+        p_participant_id: participantId,
+        p_correct_answer: isCorrect,
+      })
+
+      if (sharkError) throw sharkError
+
+      // Check if should add fire charge (every 3 correct answers)
+      if (isCorrect) {
+        const { data: fireChargeAdded, error: fireError } = await supabase.rpc("add_fire_charge", {
+          p_participant_id: participantId,
+        })
+
+        if (fireError) throw fireError
+
+        if (fireChargeAdded) {
+          toast.success("🔥 Fire Charge Ready!")
+        }
       }
-    } else {
-      // Normal phase
-      if (currentQuestionIndex < questionOrder.length - 1) {
-        // Move to next question
-        setCurrentQuestionIndex(currentQuestionIndex + 1)
-      } else {
-        // Finished all questions in cycle
-        if (wrongQuestions.length > 0) {
-          // Have wrong questions, start retry phase
-          setIsRetryPhase(true)
-          setCurrentQuestionIndex(0)
+
+      // Move to next question after delay
+      setTimeout(() => {
+        setSelectedAnswer(null)
+        if (currentQuestionIndex < questions.length - 1) {
+          setCurrentQuestionIndex(currentQuestionIndex + 1)
         } else {
-          // No wrong questions, start new cycle
+          // All questions answered, cycle back to first question
           setCurrentQuestionIndex(0)
-          setCompletedCycles((prev) => prev + 1)
-
-          // Shuffle questions for next cycle
-          const shuffled = [...questionOrder].sort(() => Math.random() - 0.5)
-          setQuestionOrder(shuffled)
         }
-      }
+      }, 1500)
+
+    } catch (error) {
+      console.error("Error recording answer:", error)
+      toast.error("Gagal menyimpan jawaban")
     }
-  }
-
-  // Continue after hold button or image challenge
-  const continueGame = () => {
-    setHoldButtonUnlocked(false)
-    setFireCharges(0)
-    setGamePhase("questions")
-  }
-
-  const handleAnswerSelect = (index: number) => {
-    if (selectedAnswer !== null) return // Prevent double click
-
-    setSelectedAnswer(index)
-    const currentQuestion = getCurrentQuestion()
-
-    // Check if correct
-    if (index === currentQuestion.correctAnswer) {
-      // Correct answer - add fire charge (both normal and retry phase)
-      const newCharges = Math.min(fireCharges + 1, 3)
-      setFireCharges(newCharges)
-
-      // Auto go to hold phase when reaching 3 charges
-      if (newCharges === 3) {
-        setTimeout(() => {
-          setGamePhase("hold")
-          setHoldButtonUnlocked(true)
-        }, 1500) // Wait for answer feedback, then go to hold
-      }
-    } else {
-      // Wrong answer - add to wrong questions list if not already there
-      if (!isRetryPhase) {
-        const questionIndex = questionOrder[currentQuestionIndex]
-        if (!wrongQuestions.includes(questionIndex)) {
-          setWrongQuestions([...wrongQuestions, questionIndex])
-        }
-      }
-    }
-
-    // Move to next question after delay
-    setTimeout(() => {
-      setSelectedAnswer(null)
-      moveToNextQuestion()
-    }, 1500)
   }
 
   // Hold button handlers
   const handleHoldStart = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault()
-    if (holdButtonUnlocked) {
+    if (canUseHoldButton && participantData?.fire_charges >= 3) {
       setIsHolding(true)
+      setGamePhase("hold")
     }
   }
 
-  const handleHoldEnd = (e: React.MouseEvent | React.TouchEvent) => {
+  const handleHoldEnd = async (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault()
     setIsHolding(false)
 
-    if (holdProgress >= 100 && holdButtonUnlocked) {
-      setHoldProgress(0)
-      setHoldButtonUsed((prev) => prev + 1)
+    if (holdProgress >= 100 && canUseHoldButton && participantData?.fire_charges >= 3) {
+      try {
+        // Use hold button
+        const { data: success, error } = await supabase.rpc("use_hold_button", {
+          p_participant_id: participantId,
+        })
 
-      // Check if this is the second hold button use
-      if (holdButtonUsed >= 1) {
-        // Go to image challenge
-        setGamePhase("loading")
-        generateImageChallenge()
-        setTimeout(() => {
-          setGamePhase("images")
-          setImageTimer(15)
-        }, 2000)
-      } else {
-        // First hold button use, continue with questions
-        continueGame()
+        if (error) throw error
+
+        if (success) {
+          toast.success("🚀 Hold Button Activated!")
+          setHoldProgress(0)
+          setGamePhase("questions")
+        }
+      } catch (error) {
+        console.error("Error using hold button:", error)
+        toast.error("Gagal menggunakan hold button")
       }
+    } else {
+      setHoldProgress(0)
+      setGamePhase("questions")
     }
   }
+
+  // Hold progress effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (isHolding && canUseHoldButton) {
+      interval = setInterval(() => {
+        setHoldProgress((prev) => Math.min(prev + 2, 100))
+      }, 50)
+    } else {
+      setHoldProgress(0)
+    }
+    return () => clearInterval(interval)
+  }, [isHolding, canUseHoldButton])
 
   // Global event listeners for hold button
   useEffect(() => {
     const handleGlobalMouseUp = () => {
       if (isHolding) {
-        setIsHolding(false)
-        if (holdProgress >= 100 && holdButtonUnlocked) {
-          setHoldProgress(0)
-          setHoldButtonUsed((prev) => prev + 1)
-
-          if (holdButtonUsed >= 1) {
-            setGamePhase("loading")
-            generateImageChallenge()
-            setTimeout(() => {
-              setGamePhase("images")
-              setImageTimer(15)
-            }, 2000)
-          } else {
-            continueGame()
-          }
-        }
+        handleHoldEnd({ preventDefault: () => {} } as any)
       }
     }
 
     const handleGlobalTouchEnd = () => {
       if (isHolding) {
-        setIsHolding(false)
-        if (holdProgress >= 100 && holdButtonUnlocked) {
-          setHoldProgress(0)
-          setHoldButtonUsed((prev) => prev + 1)
-
-          if (holdButtonUsed >= 1) {
-            setGamePhase("loading")
-            generateImageChallenge()
-            setTimeout(() => {
-              setGamePhase("images")
-              setImageTimer(15)
-            }, 2000)
-          } else {
-            continueGame()
-          }
-        }
+        handleHoldEnd({ preventDefault: () => {} } as any)
       }
     }
 
@@ -323,17 +361,6 @@ export default function PlayerGamePage() {
       document.removeEventListener("mouseup", handleGlobalMouseUp)
       document.removeEventListener("touchend", handleGlobalTouchEnd)
     }
-  }, [isHolding, holdProgress, holdButtonUnlocked, holdButtonUsed])
-
-  // Hold progress effect
-  useEffect(() => {
-    let interval: NodeJS.Timeout
-    if (isHolding) {
-      interval = setInterval(() => {
-        setHoldProgress((prev) => Math.min(prev + 2, 100))
-      }, 50)
-    }
-    return () => clearInterval(interval)
   }, [isHolding])
 
   // Answer button colors (Kahoot style)
@@ -352,60 +379,72 @@ export default function PlayerGamePage() {
     return shapes[index] || "?"
   }
 
-  const currentQuestion = getCurrentQuestion()
+  if (loading || !gameSession || !participantData || questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-deep-ocean flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-white">Memuat game...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const currentQuestion = questions[currentQuestionIndex]
 
   return (
     <div className="min-h-screen bg-deep-ocean relative overflow-hidden">
       <style jsx>{`
-    @keyframes zoomIn {
-      from {
-        opacity: 0;
-        transform: scale(0.3);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1);
-      }
-    }
-    
-    @keyframes zoomOut {
-      from {
-        opacity: 1;
-        transform: scale(1);
-      }
-      to {
-        opacity: 0;
-        transform: scale(0.3);
-      }
-    }
-    
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-    
-    .animate-zoom-in {
-      animation: zoomIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    
-    .animate-zoom-out {
-      animation: zoomOut 0.3s ease-in;
-    }
-    
-    .animate-fade-in-up {
-      animation: fadeInUp 0.5s ease-out;
-    }
-    
-    .question-transition {
-      transition: all 0.3s ease-in-out;
-    }
-  `}</style>
+        @keyframes zoomIn {
+          from {
+            opacity: 0;
+            transform: scale(0.3);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
+        @keyframes zoomOut {
+          from {
+            opacity: 1;
+            transform: scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: scale(0.3);
+          }
+        }
+        
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-zoom-in {
+          animation: zoomIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .animate-zoom-out {
+          animation: zoomOut 0.3s ease-in;
+        }
+        
+        .animate-fade-in-up {
+          animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .question-transition {
+          transition: all 0.3s ease-in-out;
+        }
+      `}</style>
+
       {/* Background */}
       <div
         className="absolute inset-0 bg-cover bg-center animate-bg-left"
@@ -425,7 +464,7 @@ export default function PlayerGamePage() {
 
       {/* Bottom texture overlay */}
       <div
-        className="absolute bottom-0 left-0 right-0 h-32 bg-repeat-x z-10 animate-bg-left-tb  "
+        className="absolute bottom-0 left-0 right-0 h-32 bg-repeat-x z-10 animate-bg-left-tb"
         style={{
           backgroundImage: `url('/textures/texture-bottom.webp')`,
           backgroundSize: "auto 100%",
@@ -463,26 +502,43 @@ export default function PlayerGamePage() {
                     variant="outline"
                     className="text-white border-cyan-300/50 bg-cyan-500/20 text-xs backdrop-blur-sm rounded-lg"
                   >
-                    {roomCode}
+                    Submarine Mode
                   </Badge>
                 </div>
               </div>
+              
               <div className="flex items-center text-white gap-6">
-                {/* 🔥 Charges */}
+                {/* 🔥 Fire Charges */}
                 <div className="flex items-center gap-2">
                   {[0, 1, 2].map((chargeIndex) => (
                     <div key={chargeIndex} className="flex flex-col items-center">
                       <div
-                        className={`text-xl transition-all duration-700 transform ${fireCharges > chargeIndex
-                          ? "filter drop-shadow-lg scale-110"
-                          : "opacity-30 grayscale scale-100"
-                          }`}
+                        className={`text-xl transition-all duration-700 transform ${
+                          participantData.fire_charges > chargeIndex
+                            ? "filter drop-shadow-lg scale-110"
+                            : "opacity-30 grayscale scale-100"
+                        }`}
                       >
                         🔥
                       </div>
                     </div>
                   ))}
                 </div>
+
+                {/* Shark Distance Indicator */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🦈</span>
+                  <div className="w-20 h-2 bg-gray-700 rounded-full">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        participantData.shark_distance > 50 ? 'bg-green-500' :
+                        participantData.shark_distance > 25 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${participantData.shark_distance}%` }}
+                    />
+                  </div>
+                </div>
+
                 {/* ⏱️ Timer */}
                 <span className="text-2xl font-mono font-bold">{formatTime(timeRemaining)}</span>
               </div>
@@ -492,46 +548,64 @@ export default function PlayerGamePage() {
 
         {/* Centered Phase Content */}
         <div className="fixed inset-0 flex items-center justify-center z-30">
-  <div className="w-full max-w-4xl text-center px-4">
-            {/* Phase-based content */}
+          <div className="w-full max-w-4xl text-center px-4">
+            {/* Questions Phase */}
             {gamePhase === "questions" && currentQuestion && (
-              <div key={`${currentQuestion.id}-${isRetryPhase ? "retry" : "normal"}`} className="animate-zoom-in">
+              <div key={currentQuestion.id} className="animate-zoom-in">
                 <Card
-                  className={`glass border-purple-300/30 hover:border-purple-300/50 transition-all duration-500 transform hover:scale-[1.02] question-transition ${selectedAnswer !== null ? "animate-zoom-out" : ""
-                    }`}
+                  className={`glass border-purple-300/30 hover:border-purple-300/50 transition-all duration-500 transform hover:scale-[1.02] question-transition ${
+                    selectedAnswer !== null ? "animate-zoom-out" : ""
+                  }`}
                 >
                   <CardContent className="space-y-6 pt-6">
                     <div className="text-center mb-6">
-                      <p className="text-2xl text-white font-medium break-words">{currentQuestion.text}</p>
+                      <p className="text-2xl text-white font-medium break-words">
+                        {currentQuestion.question_text}
+                      </p>
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {currentQuestion.options.map((option, index) => (
+                      {currentQuestion.answers.map((answer, index) => (
                         <Button
-                          key={index}
+                          key={answer.id}
                           onClick={() => handleAnswerSelect(index)}
                           disabled={selectedAnswer !== null}
-                          className={`p-6 text-left justify-start text-white font-semibold text-xl h-auto rounded-xl transition-all duration-300 ${getButtonColor(index)} ${selectedAnswer === index
-                            ? index === currentQuestion.correctAnswer
-                              ? "ring-4 ring-green-300 scale-105"
-                              : "ring-4 ring-red-300 scale-105"
-                            : "hover:scale-105"
-                            }`}
+                          className={`p-6 text-left justify-start text-white font-semibold text-xl h-auto rounded-xl transition-all duration-300 ${getButtonColor(index)} ${
+                            selectedAnswer === index
+                              ? answer.is_correct
+                                ? "ring-4 ring-green-300 scale-105"
+                                : "ring-4 ring-red-300 scale-105"
+                              : "hover:scale-105"
+                          }`}
                         >
                           <span className="text-3xl mr-4">{getButtonShape(index)}</span>
-                          {option}
+                          {answer.answer_text}
                         </Button>
                       ))}
                     </div>
+
+                    {/* Hold Button Trigger */}
+                    {canUseHoldButton && participantData.fire_charges >= 3 && (
+                      <div className="mt-6">
+                        <Button
+                          onMouseDown={handleHoldStart}
+                          onTouchStart={handleHoldStart}
+                          className="bg-gradient-to-br from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white px-8 py-4 text-lg font-bold rounded-xl animate-pulse"
+                        >
+                          🔥 HOLD TO ACTIVATE 🔥
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
             )}
 
+            {/* Hold Button Phase */}
             {gamePhase === "hold" && (
               <div className="animate-fade-in">
-                <Card className="glass border-green-300/30 hover:border-green-300/50 transition-all duration-500">
+                <Card className="glass border-orange-300/30 hover:border-orange-300/50 transition-all duration-500">
                   <CardHeader>
-                    <CardTitle className="text-white text-center text-2xl">Hold the Button!</CardTitle>
+                    <CardTitle className="text-white text-center text-2xl">🔥 SUBMARINE POWER! 🔥</CardTitle>
                   </CardHeader>
                   <CardContent className="text-center space-y-6">
                     <div className="space-y-3">
@@ -543,89 +617,15 @@ export default function PlayerGamePage() {
                       onMouseUp={handleHoldEnd}
                       onTouchStart={handleHoldStart}
                       onTouchEnd={handleHoldEnd}
-                      className={`w-48 h-48 rounded-full text-white text-3xl font-bold shadow-2xl transition-all duration-300 select-none ${holdButtonUnlocked
-                        ? "bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:scale-110 animate-glow"
-                        : "bg-gray-500 cursor-not-allowed opacity-50"
-                        }`}
-                      disabled={!holdButtonUnlocked || holdProgress >= 100}
+                      className="w-48 h-48 rounded-full text-white text-3xl font-bold shadow-2xl transition-all duration-300 select-none bg-gradient-to-br from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 hover:scale-110 animate-glow"
                       style={{ userSelect: "none", WebkitUserSelect: "none" }}
                     >
-                      {holdProgress >= 100 ? "✅" : holdButtonUnlocked ? "HOLD" : "LOCKED"}
+                      {holdProgress >= 100 ? "🚀" : "HOLD"}
                     </button>
                     {holdProgress >= 100 && (
-                      <p className="text-green-300 font-semibold text-xl animate-scale-in">
-                        {holdButtonUsed === 0 ? "🎉 Continuing questions..." : "🎉 Moving to image challenge..."}
+                      <p className="text-orange-300 font-semibold text-xl animate-scale-in">
+                        🎉 Shark pushed away! Continuing questions...
                       </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {gamePhase === "loading" && (
-              <div className="animate-fade-in">
-                <Card className="glass border-blue-300/30">
-                  <CardContent className="p-12 text-center">
-                    <div className="animate-spin w-20 h-20 border-4 border-white/30 border-t-white rounded-full mx-auto mb-6"></div>
-                    <p className="text-white text-3xl font-semibold mb-2">🎮 Preparing Image Challenge...</p>
-                    <p className="text-blue-200/80 text-lg">Get ready for teamwork!</p>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {gamePhase === "images" && (
-              <div className="animate-fade-in">
-                <Card className="glass border-red-300/50 hover:border-red-300/70 transition-all duration-500 shadow-2xl">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-white text-2xl flex items-center gap-3">🚨 IMAGE CHALLENGE</CardTitle>
-                      <div className="flex items-center gap-3">
-                        <Badge className="bg-red-600/80 text-white text-xl px-4 py-2 animate-pulse">{imageTimer}s</Badge>
-                        {/* Captain/Crew Toggle Button - Only during image phase */}
-                        <Button
-                          onClick={() => setIsCaptain(!isCaptain)}
-                          className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 text-xs"
-                        >
-                          {isCaptain ? "Crew" : "Captain"}
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {isCaptain ? (
-                      <div className="text-center space-y-6">
-                        <p className="text-yellow-300 text-2xl font-bold">👑 You are the CAPTAIN!</p>
-                        <p className="text-white text-xl">Describe this object to your crew:</p>
-                        <div className="bg-white/10 p-8 rounded-2xl border-2 border-yellow-400/50">
-                          <div className="text-9xl mb-4">{currentImageChallenge.correctEmoji}</div>
-                          <p className="text-white/80 text-lg">Use voice or gestures to help your crew!</p>
-                        </div>
-                        <p className="text-blue-200/80 text-lg">💡 Give hints without saying the exact name!</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-6">
-                        <p className="text-cyan-300 text-2xl font-bold text-center">⚓ You are CREW!</p>
-                        <p className="text-white text-xl text-center">
-                          Listen to your captain and choose the correct object:
-                        </p>
-                        <div className="grid grid-cols-2 gap-4">
-                          {currentImageChallenge.options.map((emoji, index) => (
-                            <Button
-                              key={index}
-                              onClick={() => {
-                                // Move back to questions after image challenge
-                                setTimeout(() => {
-                                  continueGame()
-                                }, 1000)
-                              }}
-                              className={`p-5 text-white font-semibold text-xl h-auto rounded-xl transition-all duration-300 ${getButtonColor(index)} hover:scale-105 flex flex-col items-center gap-3`}
-                            >
-                              <span className="text-6xl">{emoji}</span>
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
                     )}
                   </CardContent>
                 </Card>
