@@ -616,7 +616,7 @@ export default function HostRoomPage() {
 
       if (secondsLeft <= 0) {
         clearInterval(interval);
-        router.push(`../game/${gameSession.id}`);
+        router.push(`/gamemode/submarine/host/game/${gameSession.id}`);
       }
     }, 1000);
   };
@@ -731,7 +731,7 @@ export default function HostRoomPage() {
 
         if (secondsLeft <= 0) {
           clearInterval(interval);
-          router.push(`../game/${gameSession.id}?participant=${participantId}`);
+          router.push(`/gamemode/submarine/host/game/${gameSession.id}?participant=${participantId}`);
         }
       }, 1000);
     } catch (err) {
