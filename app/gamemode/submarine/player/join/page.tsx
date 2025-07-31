@@ -32,7 +32,7 @@ export default function JoinGamePage() {
     if (!nickname.trim()) return
 
     setIsJoining(true)
-    const waitingUrl = `/gamemode/submarine/gamemode/submarine/player/waiting/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
+    const waitingUrl = `/gamemode/submarine/player/waiting/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
 
     // Prefetch waiting page
     await router.prefetch(waitingUrl)
@@ -55,7 +55,7 @@ export default function JoinGamePage() {
     const avatar = "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=Huda"
 
     // Langsung redirect ke waiting room
-    const waitingUrl = `/gamemode/submarine/gamemode/submarine/player/waiting/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
+    const waitingUrl = `/gamemode/submarine/player/waiting/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
 
     // Prefetch waiting page
     router.prefetch(waitingUrl)
