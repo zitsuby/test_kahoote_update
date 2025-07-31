@@ -43,10 +43,10 @@ export default function PlayerWaitingPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  
+
   const sessionId = params.id as string;
   const participantId = searchParams.get("participant") || "";
-  
+
   const [gameSession, setGameSession] = useState<GameSession | null>(null);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -54,11 +54,14 @@ export default function PlayerWaitingPage() {
   const [error, setError] = useState<string | null>(null);
   const [countdownLeft, setCountdownLeft] = useState<number | null>(null);
   const [isGameStarting, setIsGameStarting] = useState(false);
-  const [countdown, setCountdown] = useState(3);
-  
-  const nickname = participants.find(p => p.id === participantId)?.nickname || "";
-  const avatar = participants.find(p => p.id === participantId)?.profiles?.avatar_url || "";
-  
+  const [countdown, setCountdown] = useState(10);
+
+  const nickname =
+    participants.find((p) => p.id === participantId)?.nickname || "";
+  const avatar =
+    participants.find((p) => p.id === participantId)?.profiles?.avatar_url ||
+    "";
+
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastStatusRef = useRef<string>("");
 
@@ -113,10 +116,11 @@ export default function PlayerWaitingPage() {
       setQuiz(quizData);
 
       // Fetch participants
-      const { data: participantsData, error: participantsError } = await supabase
-        .from("game_participants")
-        .select("id, nickname, score, profiles(avatar_url)")
-        .eq("session_id", sessionId);
+      const { data: participantsData, error: participantsError } =
+        await supabase
+          .from("game_participants")
+          .select("id, nickname, score, profiles(avatar_url)")
+          .eq("session_id", sessionId);
 
       if (participantsError) {
         console.error("Participants error:", participantsError);
@@ -138,12 +142,16 @@ export default function PlayerWaitingPage() {
 
     fetchGameData().finally(() => {
       setLoading(false);
-      
+
       // Prefetch game page based on mode
       if (gameSession?.game_mode === "submarine") {
-        router.prefetch(`/gamemode/submarine/player/game/${sessionId}?participant=${participantId}`);
+        router.prefetch(
+          `/gamemode/submarine/player/game/${sessionId}?participant=${participantId}`
+        );
       } else {
-        router.prefetch(`/play-active/${sessionId}?participant=${participantId}`);
+        router.prefetch(
+          `/play-active/${sessionId}?participant=${participantId}`
+        );
       }
     });
   }, [sessionId, participantId]);
@@ -185,31 +193,28 @@ export default function PlayerWaitingPage() {
 
   // Handle countdown for game start
   useEffect(() => {
-    if (
-      gameSession?.status === "active" &&
-      gameSession?.countdown_started_at
-    ) {
+    if (gameSession?.status === "active" && gameSession?.countdown_started_at) {
       const startTime = new Date(gameSession.countdown_started_at).getTime();
       const now = Date.now();
       const timeLeft = Math.ceil((startTime + 5000 - now) / 1000);
-      
+
       if (timeLeft > 0) {
         setCountdownLeft(timeLeft);
-        
+
         const interval = setInterval(() => {
-          setCountdownLeft(prev => {
+          setCountdownLeft((prev) => {
             if (prev === null) return null;
             const newValue = prev - 1;
-            
+
             if (newValue <= 0) {
               clearInterval(interval);
               return 0;
             }
-            
+
             return newValue;
           });
         }, 1000);
-        
+
         return () => clearInterval(interval);
       }
     }
@@ -224,12 +229,14 @@ export default function PlayerWaitingPage() {
       // Redirect to game page
       const timer = setTimeout(() => {
         if (gameSession?.game_mode === "submarine") {
-          router.push(`/gamemode/submarine/player/game/${sessionId}?participant=${participantId}`);
+          router.push(
+            `/gamemode/submarine/player/game/${sessionId}?participant=${participantId}`
+          );
         } else {
           router.push(`/play-active/${sessionId}?participant=${participantId}`);
         }
       }, 1000);
-      
+
       return () => clearTimeout(timer);
     }
   }, [isGameStarting, countdown, sessionId, participantId, gameSession]);
@@ -238,7 +245,7 @@ export default function PlayerWaitingPage() {
   useEffect(() => {
     if (countdownLeft === 0 && !isGameStarting) {
       setIsGameStarting(true);
-      setCountdown(3);
+      setCountdown(10);
     }
   }, [countdownLeft]);
 
@@ -246,10 +253,7 @@ export default function PlayerWaitingPage() {
     if (!participantId || !gameSession) return;
 
     try {
-      await supabase
-        .from("game_participants")
-        .delete()
-        .eq("id", participantId);
+      await supabase.from("game_participants").delete().eq("id", participantId);
 
       // Redirect to join page instead of dashboard
       router.push("/join");
@@ -337,23 +341,33 @@ export default function PlayerWaitingPage() {
         <div className="relative z-20 text-center">
           <div
             className={`
-              w-40 h-40 mx-auto flex items-center justify-center
-              font-black text-8xl mb-6 transition-all duration-500 ease-in-out
-              text-white shadow-2xl rounded-none
-              ${countdown === 3 ? "rotate-[0deg] bg-blue-800" : ""}
-              ${countdown === 2 ? "rotate-[45deg] bg-yellow-500" : ""}
-              ${countdown === 1 ? "rotate-[90deg] bg-red-600" : ""}
-              ${countdown === 0 ? "rotate-[125deg] bg-black" : ""}
-            `}
+            w-40 h-40 mx-auto flex items-center justify-center
+            font-black text-8xl mb-6 transition-all duration-500 ease-in-out
+            text-white shadow-2xl rounded-none
+            ${countdown >= 8 ? "rotate-[0deg] bg-blue-800" : ""}
+            ${countdown === 7 ? "rotate-[45deg] bg-blue-700" : ""}
+            ${countdown === 6 ? "rotate-[90deg] bg-blue-600" : ""}
+            ${countdown === 5 ? "rotate-[135deg] bg-indigo-600" : ""}
+            ${countdown === 4 ? "rotate-[180deg] bg-purple-600" : ""}
+            ${countdown === 3 ? "rotate-[225deg] bg-purple-700" : ""}
+            ${countdown === 2 ? "rotate-[270deg] bg-red-600" : ""}
+            ${countdown === 1 ? "rotate-[325deg] bg-red-700" : ""}
+            ${countdown === 0 ? "rotate-[360deg] bg-black" : ""}
+          `}
           >
             <div
               className={`
-                transition-all duration-500 ease-in-out
-                ${countdown === 3 ? "rotate-[0deg]" : ""}
-                ${countdown === 2 ? "rotate-[-45deg]" : ""}
-                ${countdown === 1 ? "rotate-[-90deg]" : ""}
-                ${countdown === 0 ? "rotate-[-125deg]" : ""}
-              `}
+              transition-all duration-500 ease-in-out
+              ${countdown >= 8 ? "rotate-[0deg]" : ""}
+              ${countdown === 7 ? "rotate-[-45deg]" : ""}
+              ${countdown === 6 ? "rotate-[-90deg]" : ""}
+              ${countdown === 5 ? "rotate-[-135deg]" : ""}
+              ${countdown === 4 ? "rotate-[-180deg]" : ""}
+              ${countdown === 3 ? "rotate-[-225deg]" : ""}
+              ${countdown === 2 ? "rotate-[-270deg]" : ""}
+              ${countdown === 1 ? "rotate-[-325deg]" : ""}
+              ${countdown === 0 ? "rotate-[-360deg]" : ""}
+            `}
             >
               {countdown > 0 ? (
                 <div className="text-8xl font-bold text-white mb-4 animate-pulse text-center">
@@ -412,15 +426,15 @@ export default function PlayerWaitingPage() {
             </div>
             <span className="text-xl font-bold text-white">GolekQuiz</span>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <div className="bg-black/30 px-3 py-1 rounded-full text-white flex items-center">
               <span className="mr-1">PIN:</span>
               <span className="font-bold">{gameSession.game_pin}</span>
             </div>
-            
-            <Button 
-              variant="destructive" 
+
+            <Button
+              variant="destructive"
               className="bg-red-600 hover:bg-red-700 text-white border-2 border-red-400 shadow-lg transition-all duration-200 hover:scale-105"
               onClick={leaveGame}
             >
@@ -446,11 +460,15 @@ export default function PlayerWaitingPage() {
               </div>
             </div>
 
-            <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-lg">{nickname}</h1>
+            <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-lg">
+              {nickname}
+            </h1>
             <div className="bg-gradient-to-r from-green-400 to-blue-500 text-white px-4 py-2 rounded-full inline-block">
               <p className="text-lg font-semibold">✅ Berhasil bergabung!</p>
             </div>
-            <p className="text-lg text-white/90 mt-2">Lihat nama Anda di layar utama</p>
+            <p className="text-lg text-white/90 mt-2">
+              Lihat nama Anda di layar utama
+            </p>
           </div>
 
           {/* Quiz Info */}
@@ -467,7 +485,9 @@ export default function PlayerWaitingPage() {
                 <div className="text-3xl font-bold text-yellow-400 mb-1">
                   {quiz.questions.length}
                 </div>
-                <div className="text-white/90 text-sm font-medium">Pertanyaan</div>
+                <div className="text-white/90 text-sm font-medium">
+                  Pertanyaan
+                </div>
               </div>
               <div className="text-center bg-green-500/20 p-3 rounded-xl border border-green-400/30">
                 <div className="text-3xl font-bold text-green-400 mb-1">
@@ -552,11 +572,21 @@ export default function PlayerWaitingPage() {
                 <div className="flex justify-center items-center gap-3 mb-4">
                   <div className="animate-spin w-6 h-6 border-3 border-white/30 border-t-white rounded-full"></div>
                   <div className="animate-bounce w-2 h-2 bg-white rounded-full"></div>
-                  <div className="animate-bounce w-2 h-2 bg-white rounded-full" style={{animationDelay: '0.1s'}}></div>
-                  <div className="animate-bounce w-2 h-2 bg-white rounded-full" style={{animationDelay: '0.2s'}}></div>
+                  <div
+                    className="animate-bounce w-2 h-2 bg-white rounded-full"
+                    style={{ animationDelay: "0.1s" }}
+                  ></div>
+                  <div
+                    className="animate-bounce w-2 h-2 bg-white rounded-full"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
                 </div>
-                <p className="text-white font-semibold">Menunggu host memulai game...</p>
-                <p className="text-white/70 text-sm mt-1">Pastikan Anda tetap di halaman ini</p>
+                <p className="text-white font-semibold">
+                  Menunggu host memulai game...
+                </p>
+                <p className="text-white/70 text-sm mt-1">
+                  Pastikan Anda tetap di halaman ini
+                </p>
               </div>
             </div>
           )}

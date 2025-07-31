@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1141,11 +1141,13 @@ function CreateQuizPageContent() {
 
 export default function CreateQuizPage() {
   return (
+    <Suspense fallback={<div>Memuat...</div>}>
     <QuizPageWithLoading 
       animation="scaleRotate"
       customLoadingMessage="Memuat halaman buat quiz..."
     >
       <CreateQuizPageContent />
     </QuizPageWithLoading>
+    </Suspense>
   );
 }

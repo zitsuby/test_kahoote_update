@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,7 @@ import { PageWithLoading } from "@/components/ui/page-with-loading";
 
 export default function Page() {
   return (
+    <Suspense fallback={<div>Memuat...</div>}>
     <PageWithLoading 
       animation="slideUp" 
       loadingDuration={500}
@@ -71,6 +72,7 @@ export default function Page() {
     >
       <RegisterPage />
     </PageWithLoading>
+    </Suspense>
   );
 }
 

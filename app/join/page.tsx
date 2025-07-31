@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,22 +58,22 @@ function JoinGamePageContent() {
       // Jika profil tidak ditemukan, coba buat profil baru
       if (profileError || !profile) {
         console.log("Profile not found, creating new profile");
-        
+
         // Ekstrak username dari email
         let username = "";
         let email = "";
-        
+
         if (user.email) {
           email = user.email;
-          username = user.email.split('@')[0];
-          
+          username = user.email.split("@")[0];
+
           // Tambahkan angka random jika username sudah ada
           const { data: usernameExists } = await supabase
             .from("profiles")
             .select("id")
             .eq("username", username)
             .single();
-            
+
           if (usernameExists) {
             username = `${username}${Math.floor(Math.random() * 1000)}`;
           }
@@ -81,7 +81,7 @@ function JoinGamePageContent() {
           username = `user_${Math.floor(Math.random() * 10000)}`;
           email = `${username}@example.com`;
         }
-        
+
         // Buat profil baru
         const { data: newProfile, error: insertError } = await supabase
           .from("profiles")
@@ -91,18 +91,18 @@ function JoinGamePageContent() {
             email: email,
             fullname: user.user_metadata?.full_name || username,
             avatar_url: user.user_metadata?.avatar_url || null,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
           })
           .select()
           .single();
-        
+
         if (insertError) {
           console.error("Error creating profile:", insertError);
           setError("Gagal membuat profile: " + insertError.message);
           setLoading(false);
           return;
         }
-        
+
         profile = newProfile;
       }
 
@@ -141,7 +141,8 @@ function JoinGamePageContent() {
         .insert({
           session_id: session.id,
           user_id: user.id,
-          nickname: profile?.username || "user_" + Math.floor(Math.random() * 10000),
+          nickname:
+            profile?.username || "user_" + Math.floor(Math.random() * 10000),
         })
         .select()
         .single();
@@ -152,16 +153,16 @@ function JoinGamePageContent() {
         setLoading(false);
         return;
       }
-      
+
       // Tentukan rute berdasarkan game_mode
-    let redirectPath = `/play/${session.id}?participant=${participant.id}`;
-    if (session.game_mode === "submarine") {
-      redirectPath = `/gamemode/submarine/player/waiting/${session.id}?participant=${participant.id}`;
-    }
-    console.log(session.game_mode)
-    console.log("Redirect path:", redirectPath);
-    // Tambahkan kondisi untuk game_mode lainnya jika diperlukan
-   
+      let redirectPath = `/play/${session.id}?participant=${participant.id}`;
+      if (session.game_mode === "submarine") {
+        redirectPath = `/gamemode/submarine/player/waiting/${session.id}?participant=${participant.id}`;
+      }
+      console.log(session.game_mode);
+      console.log("Redirect path:", redirectPath);
+      // Tambahkan kondisi untuk game_mode lainnya jika diperlukan
+
       // router.push(`/play/${session.id}?participant=${participant.id}`);
       router.push(redirectPath);
     } catch (error: any) {
@@ -185,7 +186,9 @@ function JoinGamePageContent() {
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
               <Slack className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">GolekQuiz</span>
+            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              GolekQuiz
+            </span>
           </Link>
           <Link
             href="/dashboard"
@@ -208,9 +211,7 @@ function JoinGamePageContent() {
               <CardTitle className="text-2xl text-gray-900">
                 Gabung Game
               </CardTitle>
-              <p className="text-gray-600">
-                Masukkan Game PIN untuk bergabung
-              </p>
+              <p className="text-gray-600">Masukkan Game PIN untuk bergabung</p>
             </CardHeader>
             <CardContent>
               <form onSubmit={joinGame} className="space-y-6">
@@ -224,7 +225,9 @@ function JoinGamePageContent() {
                       type="text"
                       value={gamePin}
                       onChange={(e) =>
-                        setGamePin(e.target.value.replace(/\D/g, "").slice(0, 6))
+                        setGamePin(
+                          e.target.value.replace(/\D/g, "").slice(0, 6)
+                        )
                       }
                       placeholder="123456"
                       className="mt-2 text-center text-2xl tracking-[0.5em] font-bold h-16 border-2 focus:border-blue-500 rounded-xl"
@@ -235,7 +238,9 @@ function JoinGamePageContent() {
 
                   {error && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                      <p className="text-red-600 text-sm text-center">{error}</p>
+                      <p className="text-red-600 text-sm text-center">
+                        {error}
+                      </p>
                     </div>
                   )}
 
@@ -260,7 +265,10 @@ function JoinGamePageContent() {
                   </Link>
                 </p>
                 <div className="mt-4">
-                  <Link href="/" className="text-blue-600 hover:text-blue-700 font-medium">
+                  <Link
+                    href="/"
+                    className="text-blue-600 hover:text-blue-700 font-medium"
+                  >
                     ← Kembali ke beranda
                   </Link>
                 </div>
@@ -275,12 +283,14 @@ function JoinGamePageContent() {
 
 export default function JoinGamePage() {
   return (
-    <PageWithLoading 
-      animation="slideDown"
-      customLoadingMessage="Memuat halaman bergabung..."
-      customLoadingVariant="game"
-    >
-      <JoinGamePageContent />
-    </PageWithLoading>
+    <Suspense fallback={<div>Memuat...</div>}>
+      <PageWithLoading
+        animation="slideDown"
+        customLoadingMessage="Memuat halaman bergabung..."
+        customLoadingVariant="game"
+      >
+        <JoinGamePageContent />
+      </PageWithLoading>
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { PageWithLoading } from "@/components/ui/page-with-loading";
@@ -16,7 +16,7 @@ function AuthCallbackPageContent() {
       try {
         setStatus("Memverifikasi session...");
         const { data, error } = await supabase.auth.getSession();
-        
+
         if (error) {
           console.error("Error auth callback:", error);
           setStatus("Gagal memverifikasi session");
@@ -26,12 +26,12 @@ function AuthCallbackPageContent() {
           }, 2000);
           return;
         }
-        
+
         if (data.session) {
           setStatus("Menyiapkan profil...");
           // Cek apakah user sudah memiliki profil
           await ensureUserProfile(data.session.user);
-          
+
           setStatus("Berhasil! Mengarahkan ke dashboard...");
           // Berhasil login, redirect ke dashboard
           setTimeout(() => {
@@ -61,7 +61,7 @@ function AuthCallbackPageContent() {
   // Fungsi untuk memastikan user memiliki profil
   const ensureUserProfile = async (user: any) => {
     if (!user) return;
-    
+
     try {
       // Cek apakah profil sudah ada
       const { data: existingProfile, error: profileError } = await supabase
@@ -69,58 +69,59 @@ function AuthCallbackPageContent() {
         .select("id")
         .eq("id", user.id)
         .single();
-      
+
       // Jika profil tidak ditemukan, buat profil baru
       if (profileError && profileError.code === "PGRST116") {
         console.log("Creating new profile for OAuth user");
-        
+
         // Ekstrak username dari email
         let username = "";
         if (user.email) {
-          username = user.email.split('@')[0];
-          
+          username = user.email.split("@")[0];
+
           // Tambahkan angka random jika username sudah ada
           const { data: usernameExists } = await supabase
             .from("profiles")
             .select("id")
             .eq("username", username)
             .single();
-            
+
           if (usernameExists) {
             username = `${username}${Math.floor(Math.random() * 1000)}`;
           }
         } else {
           username = `user_${Math.floor(Math.random() * 10000)}`;
         }
-        
+
         // Buat profil baru dengan semua field yang diperlukan
         const profileData = {
           id: user.id,
           username: username,
           email: user.email || "",
           avatar_url: user.user_metadata?.avatar_url || null,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
         };
 
         // Add fullname if it exists in user metadata
-        const fullname = user.user_metadata?.full_name || user.user_metadata?.name || username;
+        const fullname =
+          user.user_metadata?.full_name || user.user_metadata?.name || username;
         if (fullname) {
           profileData.fullname = fullname;
         }
-        
+
         const { error: insertError } = await supabase
           .from("profiles")
           .insert(profileData);
-          
+
         // If error due to missing column, try without fullname
-        if (insertError && insertError.message?.includes('fullname')) {
+        if (insertError && insertError.message?.includes("fullname")) {
           console.log("Retrying profile creation without fullname field...");
           const { fullname, ...profileDataWithoutFullname } = profileData;
-          
+
           const { error: retryError } = await supabase
             .from("profiles")
             .insert(profileDataWithoutFullname);
-            
+
           if (retryError) {
             console.error("Error creating profile (retry):", retryError);
             throw retryError;
@@ -150,12 +151,26 @@ function AuthCallbackPageContent() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
         ) : (
           <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="w-6 h-6 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </div>
         )}
-        <p className={`${isError ? 'text-red-600' : 'text-blue-600'} font-medium`}>
+        <p
+          className={`${
+            isError ? "text-red-600" : "text-blue-600"
+          } font-medium`}
+        >
           {status}
         </p>
         {isError && (
@@ -170,12 +185,14 @@ function AuthCallbackPageContent() {
 
 export default function AuthCallbackPage() {
   return (
-    <PageWithLoading 
-      animation="fade"
-      customLoadingMessage="Memproses autentikasi..."
-      customLoadingVariant="default"
-    >
-      <AuthCallbackPageContent />
-    </PageWithLoading>
+    <Suspense fallback={<div>Memuat...</div>}>
+      <PageWithLoading
+        animation="fade"
+        customLoadingMessage="Memproses autentikasi..."
+        customLoadingVariant="default"
+      >
+        <AuthCallbackPageContent />
+      </PageWithLoading>
+    </Suspense>
   );
 }
