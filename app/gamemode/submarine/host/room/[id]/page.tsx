@@ -96,6 +96,7 @@ interface GameSession {
   total_time_minutes: number | null;
   countdown_started_at?: number | null;
   game_end_mode?: "first_finish" | "wait_timer";
+  game_mode: string;
   participants: Array<{
     id: string;
     nickname: string;
@@ -133,7 +134,7 @@ export default function HostRoomPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
 
-  const roomCode = params.code as string;
+  const roomId = params.id as string;
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [gameSession, setGameSession] = useState<GameSession | null>(null);
   const [showCountdown, setShowCountdown] = useState(false);
@@ -168,6 +169,7 @@ export default function HostRoomPage() {
       | "not_found"
       | "no_questions"
       | "connection"
+      | "database_schema"
       | "unknown";
     message: string;
     details?: string;
@@ -289,7 +291,7 @@ export default function HostRoomPage() {
 
   const fetchQuizAndCreateSession = async () => {
     try {
-      console.log("🔍 Fetching quiz with code:", roomCode);
+      console.log("🔍 Fetching quiz with code:", roomId);
       console.log("👤 Current user:", user?.id);
 
       if (gameSession) {
@@ -300,7 +302,7 @@ export default function HostRoomPage() {
         throw new Error("User not authenticated");
       }
 
-      if (!roomCode) {
+      if (!roomId) {
         throw new Error("Quiz code is required");
       }
 
@@ -342,7 +344,7 @@ export default function HostRoomPage() {
           )
         `
         )
-        .eq("id", roomCode) // Use code instead of id for submarine mode
+        .eq("id", roomId) // Use code instead of id for submarine mode
         .single();
 
       console.log("📊 Quiz query result:", { quizData, quizError });
@@ -439,6 +441,7 @@ export default function HostRoomPage() {
           status: "waiting",
           total_time_minutes: null,
           game_end_mode: gameEndMode,
+          game_mode: "submarine",
         })
         .select()
         .single();
@@ -456,6 +459,7 @@ export default function HostRoomPage() {
         status: session.status,
         total_time_minutes: session.total_time_minutes,
         game_end_mode: session.game_end_mode || gameEndMode,
+        game_mode: session.game_mode,
         participants: [],
       });
     } catch (error) {
@@ -587,6 +591,7 @@ export default function HostRoomPage() {
         status: "active",
         total_time_minutes: totalTimeMinutes,
         game_end_mode: gameEndMode || "wait_timer",
+        game_mode: "submarine",
       })
       .eq("id", gameSession.id);
 
@@ -616,7 +621,7 @@ export default function HostRoomPage() {
 
       if (secondsLeft <= 0) {
         clearInterval(interval);
-        router.push(`/gamemode/submarine/host/game/${gameSession.id}`);
+        router.push(`../game/${gameSession.id}`);
       }
     }, 1000);
   };
@@ -731,7 +736,7 @@ export default function HostRoomPage() {
 
         if (secondsLeft <= 0) {
           clearInterval(interval);
-          router.push(`/gamemode/submarine/host/game/${gameSession.id}?participant=${participantId}`);
+          router.push(`../game/${gameSession.id}?participant=${participantId}`);
         }
       }, 1000);
     } catch (err) {

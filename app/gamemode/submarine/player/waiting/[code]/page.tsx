@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase"
 
 export default function PlayerWaitingPage() {
   const params = useParams()
@@ -16,19 +17,61 @@ export default function PlayerWaitingPage() {
   const [isGameStarting, setIsGameStarting] = useState(false)
   const [countdown, setCountdown] = useState(3)
 
-  // Simulate game starting
+  // Check for game session status
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsGameStarting(true)
-      setCountdown(3)
-    }, 5000)
+    const checkGameStatus = async () => {
+      try {
+        const { data: session, error } = await supabase
+          .from("game_sessions")
+          .select("status, countdown_started_at, started_at")
+          .eq("game_pin", roomCode)
+          .single()
 
-    return () => clearTimeout(timer)
-  }, [])
+        if (error) {
+          console.error("Error checking game status:", error)
+          return
+        }
+
+        if (session.status === "active" && session.countdown_started_at) {
+          setIsGameStarting(true)
+          setCountdown(3)
+        }
+      } catch (error) {
+        console.error("Error checking game status:", error)
+      }
+    }
+
+    // Check immediately
+    checkGameStatus()
+
+    // Set up real-time subscription
+    const subscription = supabase
+      .channel(`game_session_${roomCode}`)
+      .on('postgres_changes', 
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'game_sessions',
+          filter: `game_pin=eq.${roomCode}`
+        }, 
+        (payload) => {
+          console.log('Game session updated:', payload)
+          if (payload.new.status === 'active' && payload.new.countdown_started_at) {
+            setIsGameStarting(true)
+            setCountdown(3)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [roomCode])
 
   // Add prefetch for game page on component mount
   useEffect(() => {
-    const gameUrl = `/player/game/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
+    const gameUrl = `/gamemode/submarine/player/game/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
     router.prefetch(gameUrl)
   }, [router, roomCode, nickname, avatar])
 
@@ -46,7 +89,7 @@ export default function PlayerWaitingPage() {
 
       // kasih waktu animasi loading muncul
       const delay = setTimeout(() => {
-        const gameUrl = `/player/game/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
+        const gameUrl = `/gamemode/submarine/player/game/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
         router.push(gameUrl)
       }, 800)
 

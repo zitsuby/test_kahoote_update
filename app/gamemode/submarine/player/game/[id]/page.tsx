@@ -10,19 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useParams, useSearchParams, useRouter } from "next/navigation"
 import { Settings, Volume2, VolumeX } from "lucide-react"
-import { FullscreenButton } from "@/app/host/room/[code]/page"
-import { supabase } from "@/lib/supabase"
-import { toast } from "sonner"
-
-// Types
-type Question = {
-  id: string
-  question_text: string
-  options: string[]
-  correctAnswer: number
-  time_limit: number
-  points: number
-}
+import { FullscreenButton } from "@/app/gamemode/submarine/host/room/[id]/page"
 
 // Emoji objects for the image challenge
 const emojiObjects = [
@@ -48,8 +36,28 @@ const emojiObjects = [
   { emoji: "🧸", name: "Teddy Bear" },
 ]
 
-// Questions will be loaded from database
-let allQuestions: Question[] = []
+// All 9 questions
+const allQuestions = [
+  { id: 1, text: "Berapa hasil dari 15 + 27?", options: ["42", "41", "43", "40"], correctAnswer: 0 },
+  { id: 2, text: "Apa ibu kota Indonesia?", options: ["Jakarta", "Bandung", "Surabaya", "Medan"], correctAnswer: 0 },
+  { id: 3, text: "Berapa hasil dari 8 × 7?", options: ["54", "56", "58", "52"], correctAnswer: 1 },
+  {
+    id: 4,
+    text: "Siapa presiden pertama Indonesia?",
+    options: ["Soekarno", "Soeharto", "Habibie", "Megawati"],
+    correctAnswer: 0,
+  },
+  { id: 5, text: "Berapa hasil dari 144 ÷ 12?", options: ["11", "12", "13", "14"], correctAnswer: 1 },
+  {
+    id: 6,
+    text: "Planet terdekat dengan matahari?",
+    options: ["Venus", "Merkurius", "Mars", "Bumi"],
+    correctAnswer: 1,
+  },
+  { id: 7, text: "Berapa hasil dari 9²?", options: ["81", "72", "90", "63"], correctAnswer: 0 },
+  { id: 8, text: "Benua terbesar di dunia?", options: ["Afrika", "Amerika", "Asia", "Eropa"], correctAnswer: 2 },
+  { id: 9, text: "Berapa hasil dari 15 × 4?", options: ["50", "55", "60", "65"], correctAnswer: 2 },
+]
 
 export default function PlayerGamePage() {
   const params = useParams()
@@ -64,9 +72,6 @@ export default function PlayerGamePage() {
   const [timeRemaining, setTimeRemaining] = useState(120)
   const [gamePhase, setGamePhase] = useState<"questions" | "hold" | "loading" | "images">("questions")
   const [isCaptain, setIsCaptain] = useState(Math.random() < 0.5)
-  const [loading, setLoading] = useState(true)
-  const [sessionId, setSessionId] = useState<string>("")
-  const [participantId, setParticipantId] = useState<string>("")
 
   // Global fire charges - 3 charges needed for hold button
   const [fireCharges, setFireCharges] = useState(0) // 0-3 charges
@@ -92,121 +97,6 @@ export default function PlayerGamePage() {
     options: ["🍎", "🚗", "📱", "⚽"],
   })
 
-  // Load game data and questions
-  const loadGameData = async () => {
-    try {
-      // Get session by game code (assuming roomCode is the session ID)
-      const { data: session, error: sessionError } = await supabase
-        .from("game_sessions")
-        .select(`
-          id,
-          quiz_id,
-          status,
-          started_at,
-          total_time_minutes,
-          quizzes (
-            id,
-            title,
-            questions (
-              id,
-              question_text,
-              time_limit,
-              points,
-              order_index,
-              answers (
-                id,
-                answer_text,
-                is_correct,
-                order_index
-              )
-            )
-          )
-        `)
-        .eq("id", roomCode)
-        .single()
-
-      if (sessionError) {
-        console.error("Error loading session:", sessionError)
-        toast.error("Failed to load game session")
-        return
-      }
-
-      setSessionId(session.id)
-
-      // Get or create participant
-      const { data: existingParticipant } = await supabase
-        .from("game_participants")
-        .select("id")
-        .eq("session_id", session.id)
-        .eq("nickname", nickname)
-        .maybeSingle()
-
-      let participantIdToUse = existingParticipant?.id
-
-      if (!participantIdToUse) {
-        const { data: newParticipant, error: participantError } = await supabase
-          .from("game_participants")
-          .insert({
-            session_id: session.id,
-            nickname: nickname,
-            score: 0
-          })
-          .select("id")
-          .single()
-
-        if (participantError) {
-          console.error("Error creating participant:", participantError)
-          toast.error("Failed to join game")
-          return
-        }
-
-        participantIdToUse = newParticipant.id
-      }
-
-      setParticipantId(participantIdToUse)
-
-      // Transform questions data
-      const questions: Question[] = session.quizzes.questions
-        .sort((a, b) => a.order_index - b.order_index)
-        .map((q) => {
-          const answers = q.answers.sort((a, b) => a.order_index - b.order_index)
-          const correctAnswerIndex = answers.findIndex(a => a.is_correct)
-          
-          return {
-            id: q.id,
-            question_text: q.question_text,
-            options: answers.map(a => a.answer_text),
-            correctAnswer: correctAnswerIndex,
-            time_limit: q.time_limit,
-            points: q.points
-          }
-        })
-
-      // Update global questions array
-      allQuestions = questions
-
-      // Calculate time remaining
-      const startedAt = new Date(session.started_at)
-      const totalTimeMs = (session.total_time_minutes || 10) * 60 * 1000
-      const elapsedMs = Date.now() - startedAt.getTime()
-      const remainingMs = Math.max(0, totalTimeMs - elapsedMs)
-      const timeRemainingSeconds = Math.floor(remainingMs / 1000)
-
-      setTimeRemaining(timeRemainingSeconds)
-      setLoading(false)
-
-    } catch (error) {
-      console.error("Error loading game data:", error)
-      toast.error("Failed to load game data")
-      setLoading(false)
-    }
-  }
-
-  // Load data on component mount
-  useEffect(() => {
-    loadGameData()
-  }, [roomCode, nickname])
-
   // Timer countdown effect
   useEffect(() => {
     if (timeRemaining <= 0) return
@@ -221,13 +111,13 @@ export default function PlayerGamePage() {
   useEffect(() => {
     // Prefetch halaman result (biar cepat saat waktunya habis)
     router.prefetch(
-      `/gamemode/submarine/player/results/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
+      `/player/results/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
     )
 
     // Kalau waktu habis → redirect ke results
     if (timeRemaining <= 0) {
       router.push(
-        `/gamemode/submarine/player/results/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
+        `/player/results/${roomCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
       )
     }
   }, [timeRemaining, roomCode, nickname, avatar, router])
@@ -314,41 +204,11 @@ export default function PlayerGamePage() {
     setGamePhase("questions")
   }
 
-  const handleAnswerSelect = async (index: number) => {
+  const handleAnswerSelect = (index: number) => {
     if (selectedAnswer !== null) return // Prevent double click
 
     setSelectedAnswer(index)
     const currentQuestion = getCurrentQuestion()
-
-    // Save answer to database
-    if (participantId && sessionId && currentQuestion) {
-      try {
-        const isCorrect = index === currentQuestion.correctAnswer
-        const pointsEarned = isCorrect ? currentQuestion.points : 0
-
-        await supabase
-          .from("game_responses")
-          .insert({
-            session_id: sessionId,
-            participant_id: participantId,
-            question_id: currentQuestion.id,
-            answer_id: `answer_${index}`, // This would need to be the actual answer ID
-            response_time: 1000, // This would be calculated from when question was shown
-            points_earned: pointsEarned
-          })
-
-        // Update participant score
-        if (isCorrect) {
-          await supabase.rpc('increment_participant_score', {
-            participant_id: participantId,
-            points_to_add: pointsEarned
-          })
-        }
-
-      } catch (error) {
-        console.error("Error saving answer:", error)
-      }
-    }
 
     // Check if correct
     if (index === currentQuestion.correctAnswer) {
@@ -493,24 +353,6 @@ export default function PlayerGamePage() {
   }
 
   const currentQuestion = getCurrentQuestion()
-
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-deep-ocean relative overflow-hidden flex items-center justify-center">
-        <div
-          className="absolute inset-0 bg-cover bg-center animate-bg-left"
-          style={{
-            backgroundImage: `url('/textures/background.webp')`,
-          }}
-        />
-        <div className="relative z-20 text-center">
-          <div className="animate-spin w-20 h-20 border-4 border-white/30 border-t-white rounded-full mx-auto mb-6"></div>
-          <p className="text-white text-2xl font-semibold">Loading Game...</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-deep-ocean relative overflow-hidden">
@@ -660,7 +502,7 @@ export default function PlayerGamePage() {
                 >
                   <CardContent className="space-y-6 pt-6">
                     <div className="text-center mb-6">
-                      <p className="text-2xl text-white font-medium break-words">{currentQuestion.question_text}</p>
+                      <p className="text-2xl text-white font-medium break-words">{currentQuestion.text}</p>
                     </div>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {currentQuestion.options.map((option, index) => (

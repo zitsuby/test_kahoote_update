@@ -109,7 +109,7 @@ function JoinGamePageContent() {
       // Cek session game
       const { data: session, error: sessionError } = await supabase
         .from("game_sessions")
-        .select("id, status, quiz_id")
+        .select("id, status, quiz_id, game_mode") // Tambahkan game_mode di sini
         .eq("game_pin", gamePin.trim())
         .eq("status", "waiting")
         .single();
@@ -152,8 +152,19 @@ function JoinGamePageContent() {
         setLoading(false);
         return;
       }
-
-      router.push(`/play/${session.id}?participant=${participant.id}`);
+      
+      // Tentukan rute berdasarkan game_mode
+    let redirectPath = `/play/${session.id}?participant=${participant.id}`;
+    if (session.game_mode === "submarine") {
+      redirectPath = `/gamemode/submarine/player/waiting
+      /${session.id}?participant=${participant.id}`;
+    }
+    console.log(session.game_mode)
+    console.log("Redirect path:", redirectPath);
+    // Tambahkan kondisi untuk game_mode lainnya jika diperlukan
+   
+      // router.push(`/play/${session.id}?participant=${participant.id}`);
+      router.push(redirectPath);
     } catch (error: any) {
       console.error("Error joining game:", error);
       let errorMessage = "Gagal bergabung ke game. Silakan coba lagi.";
