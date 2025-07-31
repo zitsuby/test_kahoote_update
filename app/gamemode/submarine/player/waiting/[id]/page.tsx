@@ -251,9 +251,12 @@ export default function PlayerWaitingPage() {
         .delete()
         .eq("id", participantId);
 
-      router.push("/dashboard");
+      // Redirect to join page instead of dashboard
+      router.push("/join");
     } catch (error) {
       console.error("Error leaving game:", error);
+      // Even if deletion fails, redirect to join page
+      router.push("/join");
     }
   };
 
@@ -417,12 +420,12 @@ export default function PlayerWaitingPage() {
             </div>
             
             <Button 
-              variant="ghost" 
-              className="text-white hover:bg-black/20"
+              variant="destructive" 
+              className="bg-red-600 hover:bg-red-700 text-white border-2 border-red-400 shadow-lg transition-all duration-200 hover:scale-105"
               onClick={leaveGame}
             >
-              <ArrowLeft className="w-5 h-5 mr-1" />
-              Keluar
+              <ArrowLeft className="w-5 h-5 mr-2" />
+              Keluar dari Sesi
             </Button>
           </div>
         </header>
@@ -431,94 +434,130 @@ export default function PlayerWaitingPage() {
           {/* Player Avatar and Info */}
           <div className="text-center mb-8">
             <div className="relative inline-block mb-6">
-              <Avatar className="w-32 h-32 border-4 border-white shadow-2xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full animate-pulse"></div>
+              <Avatar className="relative w-32 h-32 border-4 border-white shadow-2xl">
                 <AvatarImage src={avatar || "/placeholder.svg"} />
-                <AvatarFallback className="bg-blue-500 text-white text-4xl">
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-4xl">
                   {nickname[0]}
                 </AvatarFallback>
               </Avatar>
+              <div className="absolute -bottom-2 -right-2 bg-green-500 w-8 h-8 rounded-full border-2 border-white flex items-center justify-center">
+                <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+              </div>
             </div>
 
-            <h1 className="text-4xl font-bold text-white mb-2">{nickname}</h1>
-            <p className="text-xl text-white/80">You're in! See your nickname on screen?</p>
+            <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-lg">{nickname}</h1>
+            <div className="bg-gradient-to-r from-green-400 to-blue-500 text-white px-4 py-2 rounded-full inline-block">
+              <p className="text-lg font-semibold">✅ Berhasil bergabung!</p>
+            </div>
+            <p className="text-lg text-white/90 mt-2">Lihat nama Anda di layar utama</p>
           </div>
 
           {/* Quiz Info */}
-          <div className="bg-black/30 p-6 rounded-xl max-w-md w-full mb-8">
-            <h2 className="text-2xl font-bold text-white text-center mb-2">
-              {quiz.title}
-            </h2>
-            <div className="flex justify-center gap-4">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-yellow-400">
+          <div className="bg-gradient-to-br from-black/40 to-black/20 backdrop-blur-md p-6 rounded-2xl max-w-md w-full mb-8 border border-white/20 shadow-2xl">
+            <div className="text-center mb-4">
+              <div className="text-2xl mb-2">🎯</div>
+              <h2 className="text-2xl font-bold text-white mb-2">
+                {quiz.title}
+              </h2>
+              <p className="text-white/70 text-sm">{quiz.description}</p>
+            </div>
+            <div className="flex justify-center gap-6">
+              <div className="text-center bg-yellow-500/20 p-3 rounded-xl border border-yellow-400/30">
+                <div className="text-3xl font-bold text-yellow-400 mb-1">
                   {quiz.questions.length}
                 </div>
-                <div className="text-white/80">Pertanyaan</div>
+                <div className="text-white/90 text-sm font-medium">Pertanyaan</div>
               </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-green-400">
+              <div className="text-center bg-green-500/20 p-3 rounded-xl border border-green-400/30">
+                <div className="text-3xl font-bold text-green-400 mb-1">
                   {participants.length}
                 </div>
-                <div className="text-white/80">Pemain</div>
+                <div className="text-white/90 text-sm font-medium">Pemain</div>
               </div>
             </div>
           </div>
 
           {/* Countdown timer */}
           {countdownLeft !== null && countdownLeft > 0 && (
-            <div className="mb-8">
-              <div className="text-2xl font-bold text-white mb-2">
-                Game dimulai dalam:
-              </div>
-              <div className="text-5xl font-bold text-yellow-400">
-                {countdownLeft}
+            <div className="mb-8 text-center">
+              <div className="bg-gradient-to-r from-red-500/20 to-orange-500/20 backdrop-blur-md border border-red-400/30 rounded-2xl p-6 inline-block">
+                <div className="text-xl font-bold text-white mb-3 flex items-center justify-center gap-2">
+                  <span className="animate-pulse">⏰</span>
+                  Game dimulai dalam:
+                </div>
+                <div className="relative">
+                  <div className="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-red-500 animate-pulse">
+                    {countdownLeft}
+                  </div>
+                  <div className="absolute inset-0 text-6xl font-bold text-yellow-400 animate-ping opacity-20">
+                    {countdownLeft}
+                  </div>
+                </div>
+                <div className="text-white/80 text-sm mt-2">detik</div>
               </div>
             </div>
           )}
 
           {/* Participants grid */}
-          <div className="w-full max-w-2xl">
-            <h2 className="text-xl font-bold text-white mb-4 text-center">
-              Pemain ({participants.length})
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {participants.map((participant) => {
-                const avatarUrl = participant.profiles?.avatar_url || "";
-                return (
-                  <div
-                    key={participant.id}
-                    className={`flex flex-col items-center p-3 rounded-lg ${
-                      participant.id === participantId
-                        ? "bg-blue-500/30 border-2 border-blue-400"
-                        : "bg-black/30"
-                    }`}
-                  >
-                    <Avatar className="w-16 h-16 mb-2">
-                      <AvatarImage src={avatarUrl} />
-                      <AvatarFallback className="bg-blue-500 text-white">
-                        {participant.nickname[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span
-                      className={`text-white truncate max-w-full text-center ${
-                        participant.id === participantId ? "font-bold" : ""
+          <div className="w-full max-w-3xl">
+            <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 backdrop-blur-md border border-purple-400/30 rounded-2xl p-6 mb-6">
+              <h2 className="text-2xl font-bold text-white mb-4 text-center flex items-center justify-center gap-2">
+                <span>👥</span>
+                Daftar Pemain ({participants.length})
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {participants.map((participant) => {
+                  const avatarUrl = participant.profiles?.avatar_url || "";
+                  return (
+                    <div
+                      key={participant.id}
+                      className={`flex flex-col items-center p-4 rounded-xl transition-all duration-200 hover:scale-105 ${
+                        participant.id === participantId
+                          ? "bg-gradient-to-br from-blue-500/40 to-purple-500/40 border-2 border-blue-400 shadow-lg"
+                          : "bg-black/30 border border-white/20 hover:bg-black/40"
                       }`}
                     >
-                      {participant.nickname}
-                    </span>
-                  </div>
-                );
-              })}
+                      <div className="relative">
+                        <Avatar className="w-16 h-16 mb-2 border-2 border-white/50">
+                          <AvatarImage src={avatarUrl} />
+                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                            {participant.nickname[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        {participant.id === participantId && (
+                          <div className="absolute -top-1 -right-1 bg-green-500 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center">
+                            <div className="text-white text-xs">✓</div>
+                          </div>
+                        )}
+                      </div>
+                      <span
+                        className={`text-white truncate max-w-full text-center text-sm ${
+                          participant.id === participantId ? "font-bold" : ""
+                        }`}
+                      >
+                        {participant.nickname}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
           {/* Waiting indicator */}
           {countdownLeft === null && (
             <div className="mt-8 text-center">
-              <div className="flex justify-center mb-4">
-                <div className="animate-spin w-8 h-8 border-4 border-white/30 border-t-white rounded-full"></div>
+              <div className="bg-gradient-to-r from-blue-500/20 to-green-500/20 backdrop-blur-md border border-blue-400/30 rounded-2xl p-6 inline-block">
+                <div className="flex justify-center items-center gap-3 mb-4">
+                  <div className="animate-spin w-6 h-6 border-3 border-white/30 border-t-white rounded-full"></div>
+                  <div className="animate-bounce w-2 h-2 bg-white rounded-full"></div>
+                  <div className="animate-bounce w-2 h-2 bg-white rounded-full" style={{animationDelay: '0.1s'}}></div>
+                  <div className="animate-bounce w-2 h-2 bg-white rounded-full" style={{animationDelay: '0.2s'}}></div>
+                </div>
+                <p className="text-white font-semibold">Menunggu host memulai game...</p>
+                <p className="text-white/70 text-sm mt-1">Pastikan Anda tetap di halaman ini</p>
               </div>
-              <p className="text-white/80">Menunggu game dimulai...</p>
             </div>
           )}
         </div>
