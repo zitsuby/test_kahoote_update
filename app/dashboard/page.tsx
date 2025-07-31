@@ -1061,13 +1061,13 @@ function DashboardContent() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="history"
-                  className="md:col-span-1 col-span-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-md transition-all duration-200 py-2.5 md:py-2 mt-1 md:mt-0"
+                  className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-md transition-all duration-200 py-2.5 md:py-2 mt-1 md:mt-0"
                 >
                   Riwayat Permainan
                 </TabsTrigger>
                 <TabsTrigger
                   value="gamemode"
-                  className="md:col-span-1 col-span-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-md transition-all duration-200 py-2.5 md:py-2 mt-1 md:mt-0"
+                  className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-md transition-all duration-200 py-2.5 md:py-2 mt-1 md:mt-0"
                 >
                   Game Mode
                 </TabsTrigger>

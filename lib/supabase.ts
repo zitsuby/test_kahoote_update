@@ -160,6 +160,9 @@ export type Database = {
           game_end_mode: string
           total_time_minutes: number | null
           countdown_started_at: string | null
+          game_mode: string
+          shark_speed: number
+          submarine_progress: number
         }
         Insert: {
           id?: string
@@ -174,6 +177,9 @@ export type Database = {
           game_end_mode?: string
           total_time_minutes?: number | null
           countdown_started_at?: string | null
+          game_mode?: string
+          shark_speed?: number
+          submarine_progress?: number
         }
         Update: {
           id?: string
@@ -188,6 +194,9 @@ export type Database = {
           game_end_mode?: string
           total_time_minutes?: number | null
           countdown_started_at?: string | null
+          game_mode?: string
+          shark_speed?: number
+          submarine_progress?: number
         }
       }
       game_participants: {
