@@ -156,8 +156,7 @@ function JoinGamePageContent() {
       // Tentukan rute berdasarkan game_mode
     let redirectPath = `/play/${session.id}?participant=${participant.id}`;
     if (session.game_mode === "submarine") {
-      redirectPath = `/gamemode/submarine/player/waiting
-      /${session.id}?participant=${participant.id}`;
+      redirectPath = `/gamemode/submarine/player/waiting/${session.id}?participant=${participant.id}`;
     }
     console.log(session.game_mode)
     console.log("Redirect path:", redirectPath);

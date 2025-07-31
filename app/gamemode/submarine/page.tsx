@@ -111,7 +111,7 @@ export default function HomePage() {
                           const avatar = "https://api.dicebear.com/9.x/bottts-neutral/svg?seed=MHuda"
 
                           // Langsung ke waiting room, skip join page
-                          const waitingUrl = `/player/waiting/${joinCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
+                          const waitingUrl = `/gamemode/submarine/player/waiting/${joinCode}?nickname=${encodeURIComponent(nickname)}&avatar=${encodeURIComponent(avatar)}`
 
                           // Prefetch waiting page
                           router.prefetch(waitingUrl)
