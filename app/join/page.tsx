@@ -109,13 +109,26 @@ function JoinGamePageContent() {
       // Cek session game
       const { data: session, error: sessionError } = await supabase
         .from("game_sessions")
-        .select("id, status, quiz_id")
+        .select("id, status, quiz_id, allow_join_after_start")
         .eq("game_pin", gamePin.trim())
-        .eq("status", "waiting")
         .single();
 
       if (sessionError || !session) {
-        setError("Game PIN tidak valid atau game sudah dimulai");
+        setError("Game PIN tidak valid");
+        setLoading(false);
+        return;
+      }
+
+      // Check if game has started and if joining is allowed
+      if (session.status === "active" && !session.allow_join_after_start) {
+        setError("Game sudah dimulai dan tidak mengizinkan pemain baru bergabung");
+        setLoading(false);
+        return;
+      }
+
+      // Check if game is finished
+      if (session.status === "finished") {
+        setError("Game sudah selesai");
         setLoading(false);
         return;
       }
