@@ -31,6 +31,7 @@ import {
   Lock,
   Clock,
   ArrowBigLeft,
+  Trophy,
 } from "lucide-react";
 import Link from "next/link";
 import { use } from "react";
@@ -958,115 +959,253 @@ function HostGamePageContent({
                 Game Settings
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-0 pb-0 space-y-6">
-              {/* Time Settings */}
-              <div className="space-y-3">
-                <Label className="block text-sm font-medium text-gray-700">
-                  Time Settings
-                </Label>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="totalTime"
-                    className="block text-sm font-medium text-gray-600"
+            <CardContent className="px-0 pb-0">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Time Settings Icon */}
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="relative group cursor-pointer"
+                >
+                  <motion.div 
+                    className="bg-gradient-to-br from-purple-50 to-blue-50 border-2 border-purple-200 rounded-xl p-4 transition-all duration-300 group-hover:border-purple-300 group-hover:shadow-lg"
+                    whileHover={{ 
+                      boxShadow: "0 10px 25px -5px rgba(147, 51, 234, 0.1), 0 10px 10px -5px rgba(147, 51, 234, 0.04)"
+                    }}
                   >
-                    Total Quiz Time (minutes)
-                  </Label>
-                  <Input
-                    id="totalTime"
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={totalTimeMinutes}
-                    onChange={(e) =>
-                      setTotalTimeMinutes(
-                        Number.parseInt(e.target.value) || 1
-                      )
-                    }
-                    className="w-full"
-                  />
-                  <div className="ml-7">
-                    <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                      ⏱️ {totalTimeMinutes} menit
+                    <div className="flex items-center justify-between mb-3">
+                      <motion.div 
+                        className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-600 rounded-lg flex items-center justify-center"
+                        whileHover={{ 
+                          scale: 1.1,
+                          rotate: 5
+                        }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Clock className="w-5 h-5 text-white" />
+                      </motion.div>
+                      <motion.div 
+                        className="text-xs font-medium text-purple-600 bg-purple-100 px-2 py-1 rounded-full"
+                        animate={{ 
+                          scale: [1, 1.05, 1],
+                          opacity: [1, 0.8, 1]
+                        }}
+                        transition={{ 
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        }}
+                      >
+                        ⏱️ {totalTimeMinutes}m
+                      </motion.div>
                     </div>
+                    <h3 className="font-semibold text-gray-800 mb-2">Time Limit</h3>
+                    <p className="text-xs text-gray-600 mb-3">Set total quiz duration</p>
+                    <motion.div
+                      whileFocus={{ scale: 1.02 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Input
+                        type="number"
+                        min="1"
+                        max="120"
+                        value={totalTimeMinutes}
+                        onChange={(e) =>
+                          setTotalTimeMinutes(
+                            Number.parseInt(e.target.value) || 1
+                          )
+                        }
+                        className="w-full text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                      />
+                    </motion.div>
                   </div>
-                </div>
-              </div>
-              
-              {/* Game End Mode Selection */}
-              <div className="space-y-3">
-                <Label className="block text-sm font-medium text-gray-700">
-                  Game End Mode
-                </Label>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="radio"
-                      id="wait_timer"
-                      name="gameEndMode"
-                      value="wait_timer"
-                      checked={gameEndMode === 'wait_timer'}
-                      onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
-                      className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
-                    />
-                    <label htmlFor="wait_timer" className="text-sm text-gray-700 cursor-pointer">
-                      <span className="font-medium">Wait for Timer</span> - Semua pemain menunggu hingga waktu habis
-                    </label>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="radio"
-                      id="first_finish"
-                      name="gameEndMode"
-                      value="first_finish"
-                      checked={gameEndMode === 'first_finish'}
-                      onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
-                      className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
-                    />
-                    <label htmlFor="first_finish" className="text-sm text-gray-700 cursor-pointer">
-                      <span className="font-medium">First to Finish</span> - Game berakhir ketika satu pemain selesai
-                    </label>
-                  </div>
-                  <div className="ml-7">
-                    <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      gameEndMode === 'wait_timer' 
-                        ? 'bg-blue-100 text-blue-700' 
-                        : 'bg-orange-100 text-orange-700'
-                    }`}>
-                      {gameEndMode === 'wait_timer' ? '⏰ Menunggu timer habis' : '🏆 First to finish'}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                </motion.div>
 
-              {/* Join After Start Setting */}
-              <div className="space-y-3">
-                <Label className="block text-sm font-medium text-gray-700">
-                  Join Settings
-                </Label>
-                <div className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    id="allowJoinAfterStart"
-                    checked={allowJoinAfterStart}
-                    onChange={(e) => setAllowJoinAfterStart(e.target.checked)}
-                    className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500 rounded"
-                  />
-                  <label htmlFor="allowJoinAfterStart" className="text-sm text-gray-700 cursor-pointer">
-                    <span className="font-medium">Allow players to join after game starts</span>
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 ml-7">
-                  Jika diaktifkan, pemain masih bisa bergabung setelah permainan dimulai
-                </p>
-                <div className="ml-7">
-                  <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    allowJoinAfterStart 
-                      ? 'bg-green-100 text-green-700' 
-                      : 'bg-red-100 text-red-700'
-                  }`}>
-                    {allowJoinAfterStart ? '✓ Join setelah start diizinkan' : '✗ Join setelah start dilarang'}
+                {/* Game End Mode Icon */}
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="relative group cursor-pointer"
+                >
+                  <motion.div 
+                    className={`border-2 rounded-xl p-4 transition-all duration-300 group-hover:shadow-lg ${
+                      gameEndMode === 'wait_timer' 
+                        ? 'bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200 group-hover:border-blue-300' 
+                        : 'bg-gradient-to-br from-orange-50 to-yellow-50 border-orange-200 group-hover:border-orange-300'
+                    }`}
+                    whileHover={{ 
+                      boxShadow: gameEndMode === 'wait_timer' 
+                        ? "0 10px 25px -5px rgba(59, 130, 246, 0.1), 0 10px 10px -5px rgba(59, 130, 246, 0.04)"
+                        : "0 10px 25px -5px rgba(249, 115, 22, 0.1), 0 10px 10px -5px rgba(249, 115, 22, 0.04)"
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <motion.div 
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          gameEndMode === 'wait_timer' 
+                            ? 'bg-gradient-to-br from-blue-500 to-cyan-600' 
+                            : 'bg-gradient-to-br from-orange-500 to-yellow-600'
+                        }`}
+                        whileHover={{ 
+                          scale: 1.1,
+                          rotate: gameEndMode === 'wait_timer' ? 5 : -5
+                        }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {gameEndMode === 'wait_timer' ? (
+                          <Clock className="w-5 h-5 text-white" />
+                        ) : (
+                          <Trophy className="w-5 h-5 text-white" />
+                        )}
+                      </motion.div>
+                      <motion.div 
+                        className={`text-xs font-medium px-2 py-1 rounded-full ${
+                          gameEndMode === 'wait_timer' 
+                            ? 'text-blue-700 bg-blue-100' 
+                            : 'text-orange-700 bg-orange-100'
+                        }`}
+                        animate={{ 
+                          scale: [1, 1.05, 1],
+                          opacity: [1, 0.8, 1]
+                        }}
+                        transition={{ 
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        }}
+                      >
+                        {gameEndMode === 'wait_timer' ? '⏰ Timer' : '🏆 First'}
+                      </motion.div>
+                    </div>
+                    <h3 className="font-semibold text-gray-800 mb-2">End Mode</h3>
+                    <p className="text-xs text-gray-600 mb-3">
+                      {gameEndMode === 'wait_timer' 
+                        ? 'Wait for timer to finish' 
+                        : 'End when first player finishes'
+                      }
+                    </p>
+                    <div className="space-y-2">
+                      <motion.div 
+                        className="flex items-center space-x-2 cursor-pointer"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <input
+                          type="radio"
+                          id="wait_timer"
+                          name="gameEndMode"
+                          value="wait_timer"
+                          checked={gameEndMode === 'wait_timer'}
+                          onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
+                          className="w-3 h-3 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <label htmlFor="wait_timer" className="text-xs text-gray-700 cursor-pointer">
+                          Wait Timer
+                        </label>
+                      </motion.div>
+                      <motion.div 
+                        className="flex items-center space-x-2 cursor-pointer"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <input
+                          type="radio"
+                          id="first_finish"
+                          name="gameEndMode"
+                          value="first_finish"
+                          checked={gameEndMode === 'first_finish'}
+                          onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
+                          className="w-3 h-3 text-orange-600 border-gray-300 focus:ring-orange-500"
+                        />
+                        <label htmlFor="first_finish" className="text-xs text-gray-700 cursor-pointer">
+                          First Finish
+                        </label>
+                      </motion.div>
+                    </div>
                   </div>
-                </div>
+                </motion.div>
+
+                {/* Join Settings Icon */}
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="relative group cursor-pointer"
+                >
+                  <motion.div 
+                    className={`border-2 rounded-xl p-4 transition-all duration-300 group-hover:shadow-lg ${
+                      allowJoinAfterStart 
+                        ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200 group-hover:border-green-300' 
+                        : 'bg-gradient-to-br from-red-50 to-pink-50 border-red-200 group-hover:border-red-300'
+                    }`}
+                    whileHover={{ 
+                      boxShadow: allowJoinAfterStart 
+                        ? "0 10px 25px -5px rgba(34, 197, 94, 0.1), 0 10px 10px -5px rgba(34, 197, 94, 0.04)"
+                        : "0 10px 25px -5px rgba(239, 68, 68, 0.1), 0 10px 10px -5px rgba(239, 68, 68, 0.04)"
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <motion.div 
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          allowJoinAfterStart 
+                            ? 'bg-gradient-to-br from-green-500 to-emerald-600' 
+                            : 'bg-gradient-to-br from-red-500 to-pink-600'
+                        }`}
+                        whileHover={{ 
+                          scale: 1.1,
+                          rotate: allowJoinAfterStart ? 5 : -5
+                        }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {allowJoinAfterStart ? (
+                          <Users className="w-5 h-5 text-white" />
+                        ) : (
+                          <Lock className="w-5 h-5 text-white" />
+                        )}
+                      </motion.div>
+                      <motion.div 
+                        className={`text-xs font-medium px-2 py-1 rounded-full ${
+                          allowJoinAfterStart 
+                            ? 'text-green-700 bg-green-100' 
+                            : 'text-red-700 bg-red-100'
+                        }`}
+                        animate={{ 
+                          scale: [1, 1.05, 1],
+                          opacity: [1, 0.8, 1]
+                        }}
+                        transition={{ 
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        }}
+                      >
+                        {allowJoinAfterStart ? '✓ Allow' : '✗ Block'}
+                      </motion.div>
+                    </div>
+                    <h3 className="font-semibold text-gray-800 mb-2">Join After Start</h3>
+                    <p className="text-xs text-gray-600 mb-3">
+                      {allowJoinAfterStart 
+                        ? 'Players can join after game starts' 
+                        : 'Players can only join before game starts'
+                      }
+                    </p>
+                    <motion.div 
+                      className="flex items-center space-x-2 cursor-pointer"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <input
+                        type="checkbox"
+                        id="allowJoinAfterStart"
+                        checked={allowJoinAfterStart}
+                        onChange={(e) => setAllowJoinAfterStart(e.target.checked)}
+                        className="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500 rounded"
+                      />
+                      <label htmlFor="allowJoinAfterStart" className="text-xs text-gray-700 cursor-pointer">
+                        Allow late join
+                      </label>
+                    </motion.div>
+                  </div>
+                </motion.div>
               </div>
             </CardContent>
           </Card>
@@ -1075,49 +1214,178 @@ function HostGamePageContent({
           <Card className="bg-white shadow-lg rounded-xl p-6">
             {/* Countdown sedang berlangsung */}
             {countdownLeft !== null && countdownLeft > 0 ? (
-              <CardContent className="p-8 text-center">
-                <h2 className="text-4xl font-bold text-purple-700 mb-2">
-                  Mulai dalam {countdownLeft} detik...
-                </h2>
-                <p className="text-gray-600">Bersiaplah!</p>
-              </CardContent>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <CardContent className="p-8 text-center">
+                  <motion.div 
+                    className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4"
+                    animate={{ 
+                      scale: [1, 1.1, 1],
+                      rotate: [0, 5, -5, 0]
+                    }}
+                    transition={{ 
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                  >
+                    <Clock className="w-10 h-10 text-white" />
+                  </motion.div>
+                  <motion.h2 
+                    className="text-4xl font-bold text-purple-700 mb-2"
+                    animate={{ 
+                      scale: [1, 1.2, 1],
+                      color: ["#7c3aed", "#3b82f6", "#7c3aed"]
+                    }}
+                    transition={{ 
+                      duration: 0.5,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                  >
+                    {countdownLeft}
+                  </motion.h2>
+                  <p className="text-gray-600 text-lg">detik lagi...</p>
+                  <p className="text-sm text-gray-500 mt-2">Bersiaplah untuk mulai!</p>
+                </CardContent>
+              </motion.div>
             ) : (
               <>
                 <CardHeader className="pb-4 px-0 pt-0 flex flex-row items-center gap-2">
-                  <Play className="w-5 h-5 text-purple-600" />
+                  <motion.div 
+                    className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-600 rounded-lg flex items-center justify-center"
+                    whileHover={{ 
+                      scale: 1.1,
+                      rotate: 5
+                    }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Play className="w-4 h-4 text-white" />
+                  </motion.div>
                   <CardTitle className="text-xl font-semibold">
                     Game Control
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="px-0 pb-0 space-y-4">
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <Button
-                      onClick={startCountdownBeforeGame}
-                      className="bg-purple-600 hover:bg-purple-700 text-white flex-1"
-                      disabled={
-                        gameSession.participants.length === 0 ||
-                        !totalTimeMinutes ||
-                        totalTimeMinutes < 1
-                      }
-                      size="lg"
+                <CardContent className="px-0 pb-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                     >
-                      <Play className="w-5 h-5 mr-2" />
-                      Mulai Game
-                    </Button>
+                      <Button
+                        onClick={startCountdownBeforeGame}
+                        className="w-full h-16 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                        disabled={
+                          gameSession.participants.length === 0 ||
+                          !totalTimeMinutes ||
+                          totalTimeMinutes < 1
+                        }
+                      >
+                        <Play className="w-6 h-6 mr-3" />
+                        Mulai Game
+                      </Button>
+                    </motion.div>
+                    
                     {gameSession?.status === "waiting" &&
                       !gameSession?.countdown_started_at && (
-                        <Button
-                          onClick={joinAsHostAndStartCountdown}
-                          disabled={isJoining}
-                          size="lg"
-                          variant="outline"
-                          className="border-green-600 text-green-600 hover:bg-green-50 hover:text-green-700 bg-transparent flex-1"
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
                         >
-                          {isJoining
-                            ? "Memulai..."
-                            : "Ikut Bermain sebagai Host"}
-                        </Button>
+                          <Button
+                            onClick={joinAsHostAndStartCountdown}
+                            disabled={isJoining}
+                            className="w-full h-16 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                          >
+                            {isJoining ? (
+                              <div className="flex items-center">
+                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-3"></div>
+                                Memulai...
+                              </div>
+                            ) : (
+                              <>
+                                <User className="w-6 h-6 mr-3" />
+                                Ikut sebagai Host
+                              </>
+                            )}
+                          </Button>
+                        </motion.div>
                       )}
+                  </div>
+                  
+                  {/* Game Status Preview */}
+                  <motion.div 
+                    className="mt-6 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-gray-700">Game Status</span>
+                      <motion.div 
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          gameSession?.status === "waiting" 
+                            ? "bg-yellow-100 text-yellow-700" 
+                            : "bg-green-100 text-green-700"
+                        }`}
+                        animate={{ 
+                          scale: [1, 1.05, 1],
+                          opacity: [1, 0.8, 1]
+                        }}
+                        transition={{ 
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        }}
+                      >
+                        {gameSession?.status === "waiting" ? "Waiting" : "Active"}
+                      </motion.div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <motion.div 
+                        className="flex items-center justify-between"
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: 0.3 }}
+                      >
+                        <span className="text-gray-600">Players:</span>
+                        <span className="font-semibold text-gray-800">{gameSession.participants.length}</span>
+                      </motion.div>
+                      <motion.div 
+                        className="flex items-center justify-between"
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: 0.4 }}
+                      >
+                        <span className="text-gray-600">Time:</span>
+                        <span className="font-semibold text-gray-800">{totalTimeMinutes}m</span>
+                      </motion.div>
+                      <motion.div 
+                        className="flex items-center justify-between"
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: 0.5 }}
+                      >
+                        <span className="text-gray-600">Mode:</span>
+                        <span className="font-semibold text-gray-800">
+                          {gameEndMode === 'wait_timer' ? 'Timer' : 'First'}
+                        </span>
+                      </motion.div>
+                      <motion.div 
+                        className="flex items-center justify-between"
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: 0.6 }}
+                      >
+                        <span className="text-gray-600">Late Join:</span>
+                        <span className={`font-semibold ${allowJoinAfterStart ? 'text-green-600' : 'text-red-600'}`}>
+                          {allowJoinAfterStart ? 'Yes' : 'No'}
+                        </span>
+                      </motion.div>
+                    </div>
                   </div>
                 </CardContent>
               </>
