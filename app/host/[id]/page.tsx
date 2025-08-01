@@ -63,6 +63,7 @@ interface GameSession {
   total_time_minutes: number | null;
   countdown_started_at?: number | null;
   game_end_mode?: 'first_finish' | 'wait_timer'; // Game end setting
+  allow_join_after_start?: boolean; // Allow players to join after game starts
   participants: Array<{
     id: string;
     nickname: string;
@@ -109,6 +110,7 @@ function HostGamePageContent({
   const [showTimeSetup, setShowTimeSetup] = useState(false);
   const [totalTimeMinutes, setTotalTimeMinutes] = useState<number>(10);
   const [gameEndMode, setGameEndMode] = useState<'first_finish' | 'wait_timer'>('wait_timer'); // Game end mode state
+  const [allowJoinAfterStart, setAllowJoinAfterStart] = useState<boolean>(false); // Allow join after start state
   const [isJoining, setIsJoining] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const springConfig = { stiffness: 100, damping: 5 };
@@ -417,6 +419,7 @@ function HostGamePageContent({
           status: "waiting",
           total_time_minutes: null,
           game_end_mode: gameEndMode, // Add game end mode to session creation
+          allow_join_after_start: allowJoinAfterStart, // Add allow join after start setting
         })
         .select()
         .single();
@@ -434,6 +437,7 @@ function HostGamePageContent({
         status: session.status,
         total_time_minutes: session.total_time_minutes,
         game_end_mode: session.game_end_mode || gameEndMode, // Add game end mode to state
+        allow_join_after_start: session.allow_join_after_start || allowJoinAfterStart, // Add allow join after start to state
         participants: [],
       });
     } catch (error) {
@@ -551,6 +555,8 @@ function HostGamePageContent({
         started_at: startedTime.toISOString(),
         status: "active",
         total_time_minutes: totalTimeMinutes,
+        game_end_mode: gameEndMode, // Update game end mode
+        allow_join_after_start: allowJoinAfterStart, // Update allow join after start setting
       })
       .eq("id", gameSession.id);
 
@@ -944,7 +950,128 @@ function HostGamePageContent({
             </CardContent>
           </Card>
 
-          {/* Time Setup Card */}
+          {/* Game Settings Card */}
+          <Card className="bg-white shadow-lg rounded-xl p-6">
+            <CardHeader className="pb-4 px-0 pt-0 flex flex-row items-center gap-2">
+              <Slack className="w-5 h-5 text-purple-600" />
+              <CardTitle className="text-xl font-semibold">
+                Game Settings
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-0 pb-0 space-y-6">
+              {/* Time Settings */}
+              <div className="space-y-3">
+                <Label className="block text-sm font-medium text-gray-700">
+                  Time Settings
+                </Label>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="totalTime"
+                    className="block text-sm font-medium text-gray-600"
+                  >
+                    Total Quiz Time (minutes)
+                  </Label>
+                  <Input
+                    id="totalTime"
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={totalTimeMinutes}
+                    onChange={(e) =>
+                      setTotalTimeMinutes(
+                        Number.parseInt(e.target.value) || 1
+                      )
+                    }
+                    className="w-full"
+                  />
+                  <div className="ml-7">
+                    <div className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                      ⏱️ {totalTimeMinutes} menit
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Game End Mode Selection */}
+              <div className="space-y-3">
+                <Label className="block text-sm font-medium text-gray-700">
+                  Game End Mode
+                </Label>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="radio"
+                      id="wait_timer"
+                      name="gameEndMode"
+                      value="wait_timer"
+                      checked={gameEndMode === 'wait_timer'}
+                      onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
+                      className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
+                    />
+                    <label htmlFor="wait_timer" className="text-sm text-gray-700 cursor-pointer">
+                      <span className="font-medium">Wait for Timer</span> - Semua pemain menunggu hingga waktu habis
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="radio"
+                      id="first_finish"
+                      name="gameEndMode"
+                      value="first_finish"
+                      checked={gameEndMode === 'first_finish'}
+                      onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
+                      className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
+                    />
+                    <label htmlFor="first_finish" className="text-sm text-gray-700 cursor-pointer">
+                      <span className="font-medium">First to Finish</span> - Game berakhir ketika satu pemain selesai
+                    </label>
+                  </div>
+                  <div className="ml-7">
+                    <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      gameEndMode === 'wait_timer' 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {gameEndMode === 'wait_timer' ? '⏰ Menunggu timer habis' : '🏆 First to finish'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Join After Start Setting */}
+              <div className="space-y-3">
+                <Label className="block text-sm font-medium text-gray-700">
+                  Join Settings
+                </Label>
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="allowJoinAfterStart"
+                    checked={allowJoinAfterStart}
+                    onChange={(e) => setAllowJoinAfterStart(e.target.checked)}
+                    className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500 rounded"
+                  />
+                  <label htmlFor="allowJoinAfterStart" className="text-sm text-gray-700 cursor-pointer">
+                    <span className="font-medium">Allow players to join after game starts</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 ml-7">
+                  Jika diaktifkan, pemain masih bisa bergabung setelah permainan dimulai
+                </p>
+                <div className="ml-7">
+                  <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    allowJoinAfterStart 
+                      ? 'bg-green-100 text-green-700' 
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    {allowJoinAfterStart ? '✓ Join setelah start diizinkan' : '✗ Join setelah start dilarang'}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Game Control Card */}
           <Card className="bg-white shadow-lg rounded-xl p-6">
             {/* Countdown sedang berlangsung */}
             {countdownLeft !== null && countdownLeft > 0 ? (
@@ -957,71 +1084,13 @@ function HostGamePageContent({
             ) : (
               <>
                 <CardHeader className="pb-4 px-0 pt-0 flex flex-row items-center gap-2">
-                  <Clock className="w-5 h-5 text-purple-600" />
+                  <Play className="w-5 h-5 text-purple-600" />
                   <CardTitle className="text-xl font-semibold">
-                    Set Quiz Time Limit
+                    Game Control
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-0 pb-0 space-y-4">
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="totalTime"
-                      className="block text-sm font-medium text-gray-700"
-                    >
-                      Total Quiz Time (minutes)
-                    </Label>
-                    <Input
-                      id="totalTime"
-                      type="number"
-                      min="1"
-                      max="120"
-                      value={totalTimeMinutes}
-                      onChange={(e) =>
-                        setTotalTimeMinutes(
-                          Number.parseInt(e.target.value) || 1
-                        )
-                      }
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  {/* Game End Mode Selection */}
-                  <div className="space-y-3">
-                    <Label className="block text-sm font-medium text-gray-700">
-                      Game End Mode
-                    </Label>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-3">
-                        <input
-                          type="radio"
-                          id="wait_timer"
-                          name="gameEndMode"
-                          value="wait_timer"
-                          checked={gameEndMode === 'wait_timer'}
-                          onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
-                          className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
-                        />
-                        <label htmlFor="wait_timer" className="text-sm text-gray-700 cursor-pointer">
-                          <span className="font-medium">Wait for Timer</span> - Semua pemain menunggu hingga waktu habis
-                        </label>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <input
-                          type="radio"
-                          id="first_finish"
-                          name="gameEndMode"
-                          value="first_finish"
-                          checked={gameEndMode === 'first_finish'}
-                          onChange={(e) => setGameEndMode(e.target.value as 'first_finish' | 'wait_timer')}
-                          className="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500"
-                        />
-                        <label htmlFor="first_finish" className="text-sm text-gray-700 cursor-pointer">
-                          <span className="font-medium">First to Finish</span> - Game berakhir ketika satu pemain selesai
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t">
+                  <div className="flex flex-col sm:flex-row gap-4">
                     <Button
                       onClick={startCountdownBeforeGame}
                       className="bg-purple-600 hover:bg-purple-700 text-white flex-1"
